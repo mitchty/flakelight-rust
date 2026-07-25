@@ -1,0 +1,65 @@
+name: Update flake.lock
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Just update the lock every ~14 days or so, daily is way too often.
+    - cron: "0 3 1,15 * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update-flake-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Configure Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Update flake.lock
+        run: nix flake update
+
+      - name: Check whether flake.lock changed
+        id: diff
+        run: |
+          if git diff --quiet -- flake.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate updated flake.lock
+        if: steps.diff.outputs.changed == 'true'
+        run: nix flake check -L
+
+      - name: Validate example against updated flake.lock
+        if: steps.diff.outputs.changed == 'true'
+        working-directory: examples/minimal
+        run: |
+          nix flake lock
+          git add -f flake.lock
+          nix build -L
+
+      # We don't want the example flake.lock to get committed on accident.
+      - name: Unstage example lock file
+        if: steps.diff.outputs.changed == 'true'
+        run: git reset examples/minimal/flake.lock
+
+      # If we got this far the update should be fine. Otherwise something in
+      # flakelight, crane, or fenix broke. Bisecting is up to future sucker
+      # mitch.
+      - name: Commit and push
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add flake.lock
+          git commit -m "flake.lock: update"
+          git pull --rebase origin main
+          git push origin HEAD:main

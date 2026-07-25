@@ -1,0 +1,60 @@
+* flakelight-rust
+
+Rust module for [[https://github.com/nix-community/flakelight][flakelight]], built on
+[[https://github.com/ipetkov/crane][crane]] + [[https://github.com/nix-community/fenix][fenix]].
+
+Unlike [[https://github.com/accelbread/flakelight-rust][accelbread/flakelight-rust]] (naersk-based, via
+nixpkgs' own rustc/cargo, no custom toolchain/cross-compilation support),
+this module gives you a pinned fenix toolchain, Windows cross-compilation
+(~x86_64-pc-windows-gnu~ via mingw64, Linux hosts only), and a fuller
+checks/devShell set: clippy (deny warnings), cargo doc (deny warnings),
+cargo-nextest, cargo-deny, a git-hooks.nix pre-push hook + ~convco~
+commit-msg hook, and an ~update~ app.
+
+This is a first "kitchen sink" pass -- everything below is unconditional
+for now (no per-feature toggles like ~rust.windows.enable~ yet); that's a
+natural follow-up once this has been proven out across real projects
+(=yeet=, =mitchty.github.io=, =fuzaketa=, =lorn=, and the
+=mitchty/flake-templates= =rust= template this was ported from).
+
+** Options
+
+~fileset~ configures the fileset the package is built with. Defaults to
+all ~*.rs~ files, ~Cargo.toml~ files, and ~Cargo.lock~.
+
+** Flake Example
+
+You can call this flake directly:
+
+#+begin_src nix
+{
+  inputs.flakelight-rust.url = "github:mitchty/flakelight-rust";
+  outputs = { flakelight-rust, ... }: flakelight-rust ./. { };
+}
+#+end_src
+
+Alternatively, add this module to an existing flakelight config:
+
+#+begin_src nix
+{
+  inputs = {
+    flakelight.url = "github:nix-community/flakelight";
+    flakelight-rust.url = "github:mitchty/flakelight-rust";
+  };
+  outputs = { flakelight, flakelight-rust, ... }: flakelight ./. {
+    imports = [ flakelight-rust.flakelightModules.default ];
+  };
+}
+#+end_src
+
+Note you can always test against a local clone/checkout via:
+
+#+begin_src sh
+nix build --override-input flakelight-rust path:/absolute/path/to/flakelight-rust --no-write-lock-file
+#+end_src
+
+** Example project / CI abusage
+
+~examples/minimal~ is a minimal consumer of this module mostly so that the
+github action in ~.github/workflows/ci.yaml~ can validate that nothing
+breaks over time, including the Windows cross-compilation path.

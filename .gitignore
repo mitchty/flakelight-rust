@@ -1,0 +1,9 @@
+/target
+/result
+/result-*
+.direnv
+.envrc.local
+
+# examples/* are intentionally left unlocked -- see comment in
+# examples/minimal/flake.nix.
+examples/*/flake.lock
