@@ -1,0 +1,20 @@
+[package]
+name = "agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "agent"
+path = "src/main.rs"
+
+[dependencies]
+common = { path = "../common" }
+wasm-bindgen = { version = "0.2.122", optional = true }
+
+[features]
+# Small, non-GUI marker feature for the wasm variant -- deliberately not a
+# full GUI/windowing wasm build. wasm-bindgen (the crate, matching the CLI
+# version pinned in flake.nix) needs to actually be used somewhere, or the
+# wasm-bindgen CLI has nothing to process ("failed to find intrinsics").
+wasm = ["dep:wasm-bindgen"]

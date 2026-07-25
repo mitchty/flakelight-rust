@@ -1,0 +1,16 @@
+[package]
+name = "engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "engine"
+path = "src/main.rs"
+
+[dependencies]
+common = { path = "../common" }
+extra = { path = "../extra" }
+
+[features]
+cuda = []

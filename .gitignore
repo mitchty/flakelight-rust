@@ -1,0 +1,9 @@
+/target
+/result
+/result-*
+.direnv
+.envrc.local
+# Ignore this default stuff intentionally for examples. Make me really want to
+#  commit updates to these files if ever. Should only need to update Cargo.lock.
+examples/*/flake.lock
+examples/*/Cargo.lock

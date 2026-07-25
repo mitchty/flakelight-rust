@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: "ci-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  flake-check:
+    name: flake check (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Configure Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Run flake check
+        run: nix flake check -L
+
+  # Fail fast eval check on all platforms
+  example-eval:
+    name: example eval (${{ matrix.system }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            system: x86_64-linux
+          - os: ubuntu-24.04-arm
+            system: aarch64-linux
+          - os: macos-latest
+            system: aarch64-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Configure Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Lock example flake
+        working-directory: examples/minimal
+        run: |
+          nix flake lock
+          git add -f flake.lock
+
+      - name: Evaluate example package derivation
+        working-directory: examples/minimal
+        run: nix eval --show-trace ".#packages.${{ matrix.system}}.default.drvPath"
+
+      - name: Evaluate example devShell derivation
+        working-directory: examples/minimal
+        run: nix eval --show-trace ".#devShells.${{ matrix.system}}.default.drvPath"
+
+  example-build-linux:
+    name: example build (${{ matrix.system }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            system: x86_64-linux
+          - os: ubuntu-24.04-arm
+            system: aarch64-linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Configure Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Lock example flake
+        working-directory: examples/minimal
+        run: |
+          nix flake lock
+          git add -f flake.lock
+
+      - name: Build example package
+        working-directory: examples/minimal
+        run: nix build -L
+
+  example-build-windows:
+    name: example build for windows via cross compilation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Configure Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Lock example flake
+        working-directory: examples/minimal
+        run: |
+          nix flake lock
+          git add -f flake.lock
+
+      - name: Build example windows cross package
+        working-directory: examples/minimal
+        run: nix build -L .#windows
+
+  example-build-macos:
+    name: example build aarch64-darwin
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Configure Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Lock example flake
+        working-directory: examples/minimal
+        run: |
+          nix flake lock
+          git add -f flake.lock
+
+      - name: Build example package
+        working-directory: examples/minimal
+        run: nix build -L
