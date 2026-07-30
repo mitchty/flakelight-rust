@@ -187,7 +187,9 @@ in
               commonArgsWindows
               // {
                 inherit cargoArtifacts;
-                meta = defaultMeta;
+                meta = defaultMeta // {
+                  platforms = [ "x86_64-windows" ];
+                };
               }
             );
         };
