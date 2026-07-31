@@ -143,8 +143,84 @@ in
       # point. I have no need for such things so not adding it.
       packages =
         { system, ... }:
+        {
+          # Hacky way to abuse cargo-deny's graph output to generate graphviz
+          # dot files (then render them to pngs) for any duplicate/banned
+          # dependencies. Pin a specific cargo-deny version since the `-g`
+          # graph-output flag isn't guaranteed to exist/behave the same
+          # across versions. Pair with `apps.dotdeps` (nix run .#dotdeps) to
+          # open the resulting pngs, if any were generated.
+          dotdeps =
+            {
+              pkgs,
+              craneLib,
+              defaultMeta,
+              ...
+            }:
+            let
+              cargo-deny-0_19 = pkgs.rustPlatform.buildRustPackage rec {
+                pname = "cargo-deny";
+                version = "0.19.9";
+
+                src = pkgs.fetchFromGitHub {
+                  owner = "EmbarkStudios";
+                  repo = "cargo-deny";
+                  rev = version;
+                  hash = "sha256-b3p4UxMDUNMKusgGDji3A0myfAfYU+o4DFnhM4mrWao=";
+                };
+
+                cargoHash = "sha256-+FWEA2T8CASg3MmTb7WpN4MO8lwiLZtsVDuWMddkUgA=";
+
+                nativeBuildInputs = [ pkgs.pkg-config ];
+                buildInputs = [
+                  pkgs.zstd
+                ]
+                ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.apple-sdk ];
+
+                env.ZSTD_SYS_USE_PKG_CONFIG = true;
+
+                # Tests require network access.
+                doCheck = false;
+
+                meta = defaultMeta // {
+                  description = "Cargo plugin to help you manage large dependency graphs";
+                  mainProgram = "cargo-deny";
+                };
+              };
+            in
+            craneLib.mkCargoDerivation {
+              src = toSource {
+                root = src;
+                inherit (config) fileset;
+              };
+              pname = "dotdeps";
+
+              nativeBuildInputs = [
+                pkgs.graphviz
+                cargo-deny-0_19
+              ];
+
+              # crane requires cargoArtifacts but like cargoDeny set this to null.
+              cargoArtifacts = null;
+              doInstallCargoArtifacts = false;
+
+              # Note: if there are any bans/dups etc... we let things go, this
+              # is intended to generate graphviz dot files, not fail the build.
+              buildPhaseCargoCommand = ''
+                mkdir -p "$out"
+                cargo --offline deny check -g "$out" bans || true
+              '';
+
+              installPhaseCommand = ''
+                for f in "$out"/graph_output/*.dot; do
+                  [ -e "$f" ] || continue
+                  dot -Tpng "$f" -o "$out/graph_output/$(basename "''${f%.dot}").png"
+                done
+              '';
+            };
+        }
         # TODO: hacky can prolly use nixpkgs lib for this.
-        lib.optionalAttrs (system == "x86_64-linux" || system == "aarch64-linux") {
+        // lib.optionalAttrs (system == "x86_64-linux" || system == "aarch64-linux") {
           windows =
             { defaultMeta, ... }:
             let
@@ -183,7 +259,7 @@ in
               };
               cargoArtifacts = craneLibWindows.buildDepsOnly commonArgsWindows;
             in
-            craneLibWindows.buildPackage (
+            (craneLibWindows.buildPackage (
               commonArgsWindows
               // {
                 inherit cargoArtifacts;
@@ -191,7 +267,12 @@ in
                   platforms = [ "x86_64-windows" ];
                 };
               }
-            );
+            )).overrideAttrs
+              (old: {
+                meta = (old.meta or { }) // {
+                  platforms = [ "x86_64-windows" ];
+                };
+              });
         };
 
       # Note for now this is a batteries included setup. That means profiling
@@ -244,6 +325,35 @@ in
               '';
             }
           }/bin/update";
+        };
+
+      # Opens the cargo-deny duplicate-dep graphs output in a browser/viewer if
+      # any were generated, otherwise says so and no-ops.
+      apps.dotdeps =
+        {
+          pkgs,
+          self,
+          system,
+          ...
+        }:
+        let
+          opener = if pkgs.stdenv.isDarwin then "open" else "xdg-open";
+        in
+        {
+          type = "app";
+          program = "${
+            pkgs.writeShellApplication {
+              name = "dotdeps";
+              text = ''
+                dir="${self.packages.${system}.dotdeps}/graph_output"
+                if [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
+                  echo "no duplicate cargo deps found in $dir, nothing to do."
+                else
+                  ${opener} "$dir"
+                fi
+              '';
+            }
+          }/bin/dotdeps";
         };
     })
   ];
