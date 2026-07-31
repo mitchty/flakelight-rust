@@ -332,7 +332,6 @@ in
       apps.dotdeps =
         {
           pkgs,
-          self,
           system,
           ...
         }:
@@ -345,7 +344,7 @@ in
             pkgs.writeShellApplication {
               name = "dotdeps";
               text = ''
-                dir="${self.packages.${system}.dotdeps}/graph_output"
+                dir="${config.inputs.self.packages.${system}.dotdeps}/graph_output"
                 if [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
                   echo "no duplicate cargo deps found in $dir, nothing to do."
                 else
