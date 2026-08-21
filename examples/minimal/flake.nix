@@ -1,4 +1,4 @@
-# Basic example showing how to use this flakelight module
+# Minimal example showing how to use this flakelight module.
 #
 # Note for ci reasons and to force downstream users to be explicit about their
 # own nix dependencies, there is no flake.lock file provided for the example
@@ -8,7 +8,7 @@
 {
   # I named it the same cause I'm a hack but just to be explicit this isn't
   # accelbreads flakelight-rust.
-  description = "mitchty/flakelight-rust basic example";
+  description = "mitchty/flakelight-rust minimal example";
   inputs = {
     flakelight.url = "github:nix-community/flakelight";
     flakelight-rust.url = "path:../..";
@@ -58,6 +58,16 @@
           settings.global.excludes = [
             "*/flake.lock"
           ];
+        };
+
+        # Be sure the "portable/static" binary is tested earlier.
+        binaries.minimal = {
+          variants = {
+            default = { };
+            portable = {
+              portable = true;
+            };
+          };
         };
       }
     );

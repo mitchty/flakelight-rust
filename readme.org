@@ -156,9 +156,9 @@ Just look at em if you got questions, they're intended to be more complete examp
 
 These are also what CI tests against so that if something breaks I can know in advance.
 
-~examples/basic~
+~examples/minimal~
 
-Probably what most might want to use, assumes a simple rust workspace setup.
+Probably what most might want to use, assumes a simple rust workspace setup. Tests out the portable derivations as well so failures happen sooner.
 
 ~examples/multi-binary~
 

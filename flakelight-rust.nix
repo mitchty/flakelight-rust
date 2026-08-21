@@ -230,7 +230,7 @@ in
 
                           On Linux setup to build a fully static, not static-pie elf binary `<hostArch>-unknown-linux-musl` targets with `CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static -C link-arg=-static -C relocation-model=static"`.
 
-                          On macOS, resets `pkgs` with `crossSystem = pkgs.stdenv.hostPlatform` to force system-library-only linking versus against the /nix/store. Note that if you link libraries in the /nix/store nothing prevents this from not being portable. You break it you buy it, not this guy.
+                          On macOS, resets `pkgs` with `crossSystem = pkgs.stdenv.hostPlatform` and will rewrite the libiconv link to /usr. Only that link though so if anything else is linked to /nix/store it'll trip the ensure check. Note that if you link libraries in the /nix/store nothing prevents this binary from not being portable. You break it you buy it, not this guy.
 
                           Nop with `target` set. Implies `doCheck = false` as tests tend not to cross compile well.
 
@@ -639,6 +639,24 @@ in
 
               readelf = "${pkgs.buildPackages.binutils}/bin/readelf";
               otool = "${pkgs.buildPackages.cctools}/bin/otool";
+              installNameTool = "${pkgs.buildPackages.cctools}/bin/install_name_tool";
+
+              # Abuse a stupid human trick of just patching out the libiconv
+              # link that we get from nix builds. Anything beyond that will
+              # survive if it links to /nix/store, if anyone wants to static
+              # link archives from /nix/store stuff it'll be fine otherwise this
+              # will keep most cli binaries working.
+              portableDarwinRelinkPostInstall =
+                lib.optionalString (variantCfg.portable && pkgsFor.stdenv.hostPlatform.isDarwin)
+                  ''
+                    for bin in "$out"/bin/*; do
+                      [ -f "$bin" ] || continue
+                      libiconv_path=$(${otool} -L "$bin" | awk '/libiconv/ && /\/nix\/store/ {print $1; exit}')
+                      if [ -n "$libiconv_path" ]; then
+                        ${installNameTool} -change "$libiconv_path" /usr/lib/libiconv.2.dylib "$bin"
+                      fi
+                    done
+                  '';
 
               portableEnsurePostFixup = lib.optionalString (variantCfg.portable && variantCfg.ensurePortable) (
                 # TODO: Do I let static-pie executables work too? They do have a
@@ -685,6 +703,9 @@ in
                     cp -r target/${effectiveTarget}/${profileDir} $out/
                     runHook postInstall
                   '';
+                }
+                // lib.optionalAttrs (portableDarwinRelinkPostInstall != "") {
+                  postInstall = (commonArgs.postInstall or "") + portableDarwinRelinkPostInstall;
                 }
                 // lib.optionalAttrs (portableEnsurePostFixup != "") {
                   postFixup = (commonArgs.postFixup or "") + portableEnsurePostFixup;
