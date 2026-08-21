@@ -7,6 +7,9 @@ version = "0.1.0"
 edition = "2024"
 license = "BlueOak-1.0.0"
 
+[workspace.metadata.crane]
+name = "complect"
+
 # Chonkier but more useful for combined profiling/debugging.
 [profile.dev]
 opt-level = 1

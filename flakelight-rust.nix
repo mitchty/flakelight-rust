@@ -24,9 +24,6 @@ let
 
   cargoToml = if hasCargoToml then fromTOML (readFile (src + /Cargo.toml)) else { };
   tomlPackage = cargoToml.package or cargoToml.workspace.package or { };
-
-  # TODO: arm windows? I got no way to test it anyway so future mitch problem
-  windowsTarget = "x86_64-pc-windows-gnu";
 in
 {
   options = {
@@ -176,6 +173,9 @@ in
                       rustflags = mkOption {
                         type = lib.types.nullOr lib.types.str;
                         default = null;
+                        description = ''
+                          Set via the `RUSTFLAGS` env var. Note cargo gives `RUSTFLAGS` top priority over `CARGO_BUILD_RUSTFLAGS` or `build.rustflags`. Future mitch if you combine this with `portable = true` in the same variant, this will replace the static link flags. Don't set both on the same variant unless you also update `rustflags` values with the needed static-linking flags too. This is how past mitch reminds you.
+                        '';
                       };
 
                       extraCargoExtraArgs = mkOption {
@@ -226,11 +226,28 @@ in
                         type = lib.types.bool;
                         default = false;
                         description = ''
-                          Only useful if true and when `target == null` aka on a native platform.
-                          On Linux sets things up to build a static elf binary via cross compilation for `<hostArch>-unknown-linux-musl` targets with `CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static -C link-arg=-static"`.
-                          On macOS, resets `pkgs` with `crossSystem = pkgs.stdenv.hostPlatform` to force system-library-only linking versus /nix/store. Note that if you link libraries in the /nix/store nothing prevents this from not being portable. You break it you buy it, not this guy.
+                          Only useful if true and when `target == null` aka on a native platform build.
+
+                          On Linux setup to build a fully static, not static-pie elf binary `<hostArch>-unknown-linux-musl` targets with `CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static -C link-arg=-static -C relocation-model=static"`.
+
+                          On macOS, resets `pkgs` with `crossSystem = pkgs.stdenv.hostPlatform` to force system-library-only linking versus against the /nix/store. Note that if you link libraries in the /nix/store nothing prevents this from not being portable. You break it you buy it, not this guy.
 
                           Nop with `target` set. Implies `doCheck = false` as tests tend not to cross compile well.
+
+                          Note when true, `ensurePortable` which is on by default actually checks the resulting binaries live up to that promise, and kills the build if they don't, instead of just trusting the build flags did their job.
+                        '';
+                      };
+
+                      ensurePortable = mkOption {
+                        type = lib.types.bool;
+                        default = true;
+                        description = ''
+                          Only meaningful when `portable = true`. After the binary is built, we verify the resulting `$out/bin/*` binary is truly portable and more importantly, if not, fails the build in `postFixup` if it is not. This ensure is: I wasn't asking, to be sure that I don't accidentally break the portable binary builds.
+
+                          - For Linux every binary must have no ELF dynamic section at all, ex: `readelf -l` shows no INTERP or DYNAMIC elf sections present on the binary.
+                          - For macOS every binary must have zero linked libraries that point to `/nix/store` checked via `otool -L`, so I don't accidentally depend on libs in /nix/store. Note this only checks linked libraries, not other portability caveats like macOS version shenanigans, codesigning, thats still on you dude.
+
+                          Set to `false` to skip this check entirely if you know better than readelf or otool.
                         '';
                       };
 
@@ -320,6 +337,9 @@ in
               root = src;
               inherit (config) fileset;
             };
+            # Fallback package name if it can't be found.
+            pname = config.pname;
+            version = tomlPackage.version or "0.0.0";
             strictDeps = true;
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -340,6 +360,8 @@ in
               root = src;
               inherit (config) fileset;
             };
+            pname = config.pname;
+            version = tomlPackage.version or "0.0.0";
             strictDeps = true;
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -379,10 +401,10 @@ in
           "${config.pname}-deny" = craneLib.cargoDeny { inherit (commonArgs) src; };
         };
 
-      # Windows cross build using x86_64-pc-windows-gnu. Linux only its doesn't
-      # work on darwin. Haven't tested if this works on linux arm don't care
-      # much. Might make it possible to build a windows arm binary too at some
-      # point. I have no need for such things so not adding it unless I do need it.
+      # Extra flake outputs: cargo-deny, dotdeps, and one derivation per
+      # `binaries.<name>.variants.<variant>` entry (windows cross builds
+      # included - just a variant with `target = "x86_64-pc-windows-gnu"`,
+      # see `crossSystems`/`mkCrossPkgsFor` below).
       packages =
         { system, ... }:
         let
@@ -393,20 +415,26 @@ in
               crossSystem = config.crossSystems.${target};
             };
 
+          # Reuse the `craneLib` or `rustToolchain` when possible. Mostly for
+          # native builds. Only falls back the chonky boi fenix stuff mostly for
+          # cross compilation tasks.
           mkCraneLibFor =
             target: pkgsFor:
-            let
-              toolchain =
-                if target == null then
-                  config.inputs.fenix.packages.${system}.stable.toolchain
-                else
-                  config.inputs.fenix.packages.${system}.combine [
-                    config.inputs.fenix.packages.${system}.stable.cargo
-                    config.inputs.fenix.packages.${system}.stable.rustc
-                    config.inputs.fenix.packages.${system}.targets.${target}.stable.rust-std
-                  ];
-            in
-            (config.inputs.crane.mkLib pkgsFor).overrideToolchain (_: toolchain);
+            if target == null && pkgsFor ? craneLib then
+              pkgsFor.craneLib
+            else
+              let
+                toolchain =
+                  if target == null then
+                    config.inputs.fenix.packages.${system}.stable.toolchain
+                  else
+                    config.inputs.fenix.packages.${system}.combine [
+                      config.inputs.fenix.packages.${system}.stable.cargo
+                      config.inputs.fenix.packages.${system}.stable.rustc
+                      config.inputs.fenix.packages.${system}.targets.${target}.stable.rust-std
+                    ];
+              in
+              (config.inputs.crane.mkLib pkgsFor).overrideToolchain (_: toolchain);
 
           depsSrc = toSource {
             root = src;
@@ -551,7 +579,11 @@ in
 
               resolvedEnv =
                 lib.optionalAttrs (variantCfg.portable && pkgs.stdenv.hostPlatform.isLinux) {
-                  CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static -C link-arg=-static";
+                  # Ensure no PT_DYNAMIC or PT_INTERP program headers are
+                  # present in the elf binary to know that the binary is truly
+                  # portable. Versus a "static-pie" setup which has a DYNAMIC
+                  # entry at least.
+                  CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static -C link-arg=-static -C relocation-model=static";
                 }
                 // (binCfg.env resolvedInjected)
                 // (variantCfg.env resolvedInjected)
@@ -605,7 +637,44 @@ in
 
               cargoArtifacts = craneLibFor.buildDepsOnly (commonArgs // { src = depsSrc; });
 
-              # The final build derivation args. Used mostly for wasm builds.
+              readelf = "${pkgs.buildPackages.binutils}/bin/readelf";
+              otool = "${pkgs.buildPackages.cctools}/bin/otool";
+
+              portableEnsurePostFixup = lib.optionalString (variantCfg.portable && variantCfg.ensurePortable) (
+                # TODO: Do I let static-pie executables work too? They do have a
+                # DYNAMIC segment for self relocation of functions.... Eh future
+                # me problem. Mabye an enum for linux on what kinda static
+                # binary gets yeeted to disk.
+                if pkgsFor.stdenv.hostPlatform.isLinux then
+                  ''
+                    for bin in "$out"/bin/*; do
+                      [ -f "$bin" ] || continue
+                      if ${readelf} -l "$bin" 2>/dev/null | grep -qE 'INTERP|DYNAMIC'; then
+                        printf '%s\n' "flakelight-rust: portable binary '$bin' contais ELF INTERP and/or DYNAMIC program headers." >&2
+                        ${readelf} -l "$bin" >&2 || true
+                        printf '%s\n' "Set binaries.${name}.variants.${variantName}.ensurePortable = false if that's actually expected for this binary." >&2
+                        exit 1
+                      fi
+                    done
+                  ''
+                else if pkgsFor.stdenv.hostPlatform.isDarwin then
+                  ''
+                    for bin in "$out"/bin/*; do
+                      [ -f "$bin" ] || continue
+                      if ${otool} -L "$bin" | tail -n +2 | grep -q '/nix/store'; then
+                        printf '%s\n' "flakelight-rust: portable binary '$bin' has dynamic links pointing to /nix/store:" >&2
+                        ${otool} -L "$bin" | tail -n +2 | grep '/nix/store' >&2
+                        printf '%s\n' "Set binaries.${name}.variants.${variantName}.ensurePortable = false if that's actually expected for this binary." >&2
+                        exit 1
+                      fi
+                    done
+                  ''
+                else
+                  ""
+              );
+
+              # The final build derivation args. Used mostly for wasm builds
+              # and the `ensurePortable` check now toooo....
               finalArgs =
                 commonArgs
                 // lib.optionalAttrs variantCfg.wasm.enable {
@@ -616,6 +685,9 @@ in
                     cp -r target/${effectiveTarget}/${profileDir} $out/
                     runHook postInstall
                   '';
+                }
+                // lib.optionalAttrs (portableEnsurePostFixup != "") {
+                  postFixup = (commonArgs.postFixup or "") + portableEnsurePostFixup;
                 };
 
               built = craneLibFor.buildPackage (
@@ -740,60 +812,6 @@ in
               '';
             };
         }
-        # TODO: hacky can prolly use nixpkgs lib for this.
-        // lib.optionalAttrs (system == "x86_64-linux" || system == "aarch64-linux") {
-          windows =
-            { defaultMeta, ... }:
-            let
-              pkgsWindows = import config.inputs.nixpkgs {
-                inherit system;
-                crossSystem = {
-                  config = "x86_64-w64-mingw32";
-                  libc = "msvcrt";
-                };
-              };
-              toolchain = config.inputs.fenix.packages.${system}.combine [
-                config.inputs.fenix.packages.${system}.stable.cargo
-                config.inputs.fenix.packages.${system}.stable.rustc
-                config.inputs.fenix.packages.${system}.targets.${windowsTarget}.stable.rust-std
-              ];
-              craneLibWindows = (config.inputs.crane.mkLib pkgsWindows).overrideToolchain (_: toolchain);
-              commonArgsWindows = {
-                src = toSource {
-                  root = src;
-                  inherit (config) fileset;
-                };
-                strictDeps = true;
-                # Can't run windows binaries during the linux build without
-                # binfmt setup by default so lets not do it. Testing of windows
-                # binaries can be done via wine methinks.
-                doCheck = false;
-                CARGO_BUILD_TARGET = windowsTarget;
-                nativeBuildInputs = with pkgsWindows.buildPackages; [
-                  nasm
-                  cmake
-                ];
-                buildInputs = [ pkgsWindows.windows.pthreads ];
-                # TODO: Extra CFLAGS/CC_... setup if something like aws-lc-sys
-                # gets pulled in cause then you need openssl.
-              };
-              cargoArtifacts = craneLibWindows.buildDepsOnly commonArgsWindows;
-            in
-            (craneLibWindows.buildPackage (
-              commonArgsWindows
-              // {
-                inherit cargoArtifacts;
-                meta = defaultMeta // {
-                  platforms = [ "x86_64-windows" ];
-                };
-              }
-            )).overrideAttrs
-              (old: {
-                meta = (old.meta or { }) // {
-                  platforms = [ "x86_64-windows" ];
-                };
-              });
-        }
         // binaryOutputs;
 
       # Note for now this is a batteries included setup. That means profiling
@@ -813,10 +831,18 @@ in
             ghostscript
           ];
 
-        env = { rustPlatform, ... }: { RUST_SRC_PATH = "${rustPlatform.rustLibSrc}"; };
+        # Be sure we point at the fenix rust install in the devshell to match
+        # what builds in the derivations.
+        env =
+          { pkgs, ... }:
+          {
+            RUST_SRC_PATH = "${
+              config.inputs.fenix.packages.${pkgs.system}.stable.rust-src
+            }/lib/rustlib/src/rust/library";
+          };
       };
 
-      # TODO: Pull this out of the flakelight module.
+      # TODO: Pull this out of the flakelight module?
       perSystem = pkgs: {
         checks.git-hooks = config.inputs.git-hooks.lib.${pkgs.system}.run {
           inherit src;
@@ -861,7 +887,7 @@ in
           ...
         }:
         let
-          opener = if pkgs.stdenv.isDarwin then "open" else "xdg-open";
+          opener = if pkgs.stdenv.hostPlatform.isDarwin then "open" else "xdg-open";
         in
         {
           type = "app";
