@@ -116,7 +116,17 @@ in
               overrideCraneArgs = mkOption {
                 type = lib.types.functionTo lib.types.attrs;
                 default = { commonArgs, ... }: commonArgs;
-                description = "Escape hatch function to help return the final crane `commonArgs`. Can be overriden per-variant.";
+                description = ''
+                  Escape hatch function to help return the final crane `commonArgs`. Can be overriden per-variant. Allows changing args directly if needed.
+                '';
+              };
+
+              extraCraneArgs = mkOption {
+                type = lib.types.functionTo lib.types.attrs;
+                default = _: { };
+                description = ''
+                  Extra crane args merged via `//` on top of the final `commonArgs`, after `overrideCraneArgs` has run. Behaves more like you'd expect a nix Arg attrset.
+                '';
               };
 
               postProcess = mkOption {
@@ -195,7 +205,15 @@ in
                       overrideCraneArgs = mkOption {
                         type = lib.types.nullOr (lib.types.functionTo lib.types.attrs);
                         default = null;
-                        description = "Crane arg overrides the derivtions `overrideCraneArgs`.";
+                        description = ''
+                          Overrides the parent binary's `overrideCraneArgs` entirely if set, not merged or additive.
+                        '';
+                      };
+
+                      extraCraneArgs = mkOption {
+                        type = lib.types.functionTo lib.types.attrs;
+                        default = _: { };
+                        description = "Extra additive crane attr args merged via `//` on top of the parent binaries `extraCraneArgs` result, applied after `overrideCraneArgs`.";
                       };
 
                       postProcess = mkOption {
@@ -540,6 +558,9 @@ in
                 // lib.optionalAttrs (variantCfg.cargoProfile != null) { CARGO_PROFILE = variantCfg.cargoProfile; }
                 // lib.optionalAttrs (variantCfg.rustflags != null) { RUSTFLAGS = variantCfg.rustflags; };
 
+              resolvedExtraCraneArgs =
+                (binCfg.extraCraneArgs resolvedInjected) // (variantCfg.extraCraneArgs resolvedInjected);
+
               profileDir =
                 if variantCfg.cargoProfile == "dev" then
                   "debug"
@@ -579,7 +600,8 @@ in
               postProcessFn =
                 if variantCfg.postProcess != null then variantCfg.postProcess else binCfg.postProcess;
 
-              commonArgs = overrideCraneArgsFn (injected // { commonArgs = baseCommonArgs; });
+              commonArgs =
+                (overrideCraneArgsFn (injected // { commonArgs = baseCommonArgs; })) // resolvedExtraCraneArgs;
 
               cargoArtifacts = craneLibFor.buildDepsOnly (commonArgs // { src = depsSrc; });
 

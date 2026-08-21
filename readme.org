@@ -56,9 +56,15 @@ You may override this whole approach entirely by using the ~fileset~ attribute t
 
 Extra ~cargo~ args to build the with e.g. ~"-p my-crate"~ Defaults to ~"-p <name>"~.
 
-**** ~nativeBuildInputs~, ~buildInputs~, ~env~, ~overrideCraneArgs~, ~postProcess~
+**** ~nativeBuildInputs~, ~buildInputs~, ~env~, ~overrideCraneArgs~, ~extraCraneArgs~, ~postProcess~
 
 Used to force override inputs if needed per variant/crate derivation.
+
+~overrideCraneArgs~
+Is mostly an emergency escape hatch for when you need to surgically replace or update attr sets. It receives ~{ commonArgs, ... }~ ~commonArgs~ being the derivation ~src~, ~pname~, ~cargoExtraArgs~, ~nativeBuildInputs~, ~buildInputs~, ~env~, etc... and its return is the crane ~commonArgs~ directly. For regular additive attr set merge use ~extraCraneArgs~ below.
+
+~extraCraneArgs~
+The more "normal" approach to attr set merging in nix/nixpkgs lib type stuff. All merges are done via ~//~ on top of the final ~commonArgs~, note it runs after ^^^ ~overrideCraneArgs~. Less of a pain to use in remembering to merge ~commonArgs~ yourself.
 
 **** ~variants.NAME~
 
@@ -76,8 +82,9 @@ Suffix named build variant(s) of this binary. The ~default~ variant produces ~pa
   - ~env~, ~nativeBuildInputs~, ~buildInputs~
     Nix attrsets merged on top of the parent binaries attrsets like most nixpkgs approaches.
     Inputs are already resolved when ~env~ runs, so things like ~LD_LIBRARY_PATH = lib.makeLibraryPath buildInputs~ just work.
-  - ~overrideCraneArgs~, ~postProcess~
-    Used to override the parent attrsets if set.
+  - ~overrideCraneArgs~, ~extraCraneArgs~, ~postProcess~
+    ~overrideCraneArgs~ overrides the parent binary's ~overrideCraneArgs~ entirely if set.
+    ~extraCraneArgs~ is merged with ~//~ on top of the parent binaries ~extraCraneArgs~ result attr set. Done after override cause the other way around seems silly af.
   - ~portable~
     Only meaningful when ~target == null~ aka native builds. On Linux, builds a musl based static elf binary by cross compiling for ~<hostArch>-unknown-linux-musl~ with static musl specific ~RUSTFLAGS~. On macOS, reinstantiates ~pkgs~ with ~crossSystem =
     pkgs.stdenv.hostPlatform~ to force system library linking outside of the normal /nix/store. The resulting binary is only actually portable across macOS systems if the specific variants ~buildInputs~ avoid libraries directly from /nix/store libs, aka nixpkgs ~libiconv~ for most cli binaries. This is a you problem to make sure the binary is portable or to patchelf anything out after build., which is on you to arrange. Nop when combined with ~target~ ex: Windows which is effecively static already. Implies ~doCheck = false~.
