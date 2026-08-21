@@ -338,7 +338,7 @@ in
               inherit (config) fileset;
             };
             # Fallback package name if it can't be found.
-            pname = config.pname;
+            inherit (config) pname;
             version = tomlPackage.version or "0.0.0";
             strictDeps = true;
           };
@@ -360,7 +360,7 @@ in
               root = src;
               inherit (config) fileset;
             };
-            pname = config.pname;
+            inherit (config) pname;
             version = tomlPackage.version or "0.0.0";
             strictDeps = true;
           };
