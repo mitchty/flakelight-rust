@@ -12,8 +12,9 @@ Unlike [[https://github.com/accelbread/flakelight-rust][accelbread/flakelight-ru
   * clippy is setup to deny warnings for release profile builds
   * cargo doc also setup to deny warnings for any documentation
   * cargo-nextest to allow for easy unit test integration
-  * cargo-deny to help detecting duplicate crates as well as CVE or license drift
-  * git-hooks.nix pre-push hook + ~convco~ commit-msg hook, and an ~update~ app to make day to day development updates easy (this probably needs to get yeeted out of here tbh)
+  * cargo-deny to help detecting duplicate crates as well as license or dependency-graph drift
+  * optional cargo-audit check via ~audit.enable~ against a rustsec advisory db input for CVE scanning
+  * an ~update~ app to make day to day development updates easy
 - Treefmt setup and check integration
 
 This is a bit of a POC for now, I will be dogfooding it for myself on my own projects first as that is where most of this nonsense originates from anyway. Basically I wanted to make my nix rust development much simpler when I start new projects as well as keep them in sync betwixt them all as it was getting a bit obscene the drift between disparate rust projects and given I am a nix fan and flakelight abuser might as well try fixing the DRY/WET problem at its source.
@@ -35,6 +36,12 @@ Targets without an entry ex: ~wasm32-unknown-unknown~ still get the fenix ~rust-
 *** ~cargoDenyPackage~
 
 The ~cargo-deny~ package derivation used by the ~dotdeps~ app for dep-graph output, here cause cargo deny needs the ~-g~ flag for dotdeps. Defaults to this module's pinned ~packages.cargo-deny-0_19~ derivation so I know dep graph stuff works.
+
+*** ~audit.enable~
+
+Off by default. When true, adds a ~checks."${pname}-audit"~ derivation that runs ~cargo audit~ via crane against the ~advisory-db~ flake input.
+
+The default input for it is ~github:rustsec/advisory-db~ but can changed by callers via ~inputs.advisory-db.follows~ or `lib.mkForce` on ~flakelightModule~'s ~inputs.advisory-db~.
 
 *** ~binaries.NAME~
 
@@ -159,6 +166,10 @@ These are also what CI tests against so that if something breaks I can know in a
 ~examples/minimal~
 
 Probably what most might want to use, assumes a simple rust workspace setup. Tests out the portable derivations as well so failures happen sooner.
+
+~examples/lib~
+
+Not really any different to ~examples/minimal~ but for a library-only crate example. Shows that ~packages.default~ and the whole ~checks~ set with clippy, doc, nextest, deny et al work for a plain lib crate.
 
 ~examples/multi-binary~
 

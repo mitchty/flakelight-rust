@@ -1,0 +1,7 @@
+SPDXVersion: SPDX-2.0
+DataLicense: CC0-1.0
+Creator: Person: Mitchell Tishmack (git@mitchty.net)
+PackageName: flakelight-rust
+PackageOriginator: Person: Mitchell Tishmack (git@mitchty.net)
+PackageHomePage: https://github.com/mitchty/flakelight-rust
+PackageLicenseDeclared: BlueOak-1.0.0

@@ -1,0 +1,9 @@
+[package]
+name = "libonly"
+version = "0.1.0"
+edition = "2024"
+license = "BlueOak-1.0.0"
+
+[lib]
+name = "libonly"
+path = "src/lib.rs"

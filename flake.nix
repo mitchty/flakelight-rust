@@ -15,7 +15,6 @@
       crane,
       fenix,
       flakelight-treefmt,
-      git-hooks,
       advisory-db,
       ...
     }:
@@ -41,7 +40,6 @@
           imports = [ ./flakelight-rust.nix ];
           inputs.crane = lib.mkDefault crane;
           inputs.fenix = lib.mkDefault fenix;
-          inputs.git-hooks = lib.mkDefault git-hooks;
           inputs.advisory-db = lib.mkDefault advisory-db;
         };
 
@@ -69,10 +67,6 @@
     crane.url = "github:ipetkov/crane";
     fenix = {
       url = "github:nix-community/fenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    git-hooks = {
-      url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     advisory-db = {

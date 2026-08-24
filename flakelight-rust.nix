@@ -54,6 +54,15 @@ in
       description = "Cargo deny package derivation";
     };
 
+    # Optionally run cargo audit in `nix flake check`
+    audit = {
+      enable = mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Optionally add a `checks.\"\${pname}-audit\"` entry that runs `cargo audit` against the `advisory-db` input.";
+      };
+    };
+
     # Way to splice in other binary crate derivations. Each entry produces a
     # package derivation per defined variant.
     binaries = mkOption {
@@ -394,11 +403,18 @@ in
 
           # Setup cargo-deny so that licenses, bans, and source urls are
           # validated by default.
-          #
-          # The advisory-db check uses network access, I'll figure out how to
-          # point it at the input advisory-db later so fully offline works as
-          # expected, porting this all over from my own stuff is enough for now.
           "${config.pname}-deny" = craneLib.cargoDeny { inherit (commonArgs) src; };
+        }
+        // lib.optionalAttrs config.audit.enable {
+          # User provides the advisory-db as an input, then we use that for
+          # checks.
+          #
+          # This lets things be tested out like so in ci:
+          # nix flake check -L --override-input advisory-db github:rustsec/advisory-db
+          "${config.pname}-audit" = craneLib.cargoAudit {
+            inherit (commonArgs) src;
+            advisory-db = config.inputs.advisory-db;
+          };
         };
 
       # Extra flake outputs: cargo-deny, dotdeps, and one derivation per
@@ -810,7 +826,6 @@ in
 
               nativeBuildInputs = [
                 pkgs.graphviz
-                pkgs.cargo-audit
                 (config.cargoDenyPackage { inherit pkgs lib; })
               ];
 
@@ -821,7 +836,6 @@ in
               buildPhaseCargoCommand = ''
                 mkdir -p "$out"
                 cargo --offline deny check bans licenses sources
-                cargo audit -n -d ${config.inputs.advisory-db}
                 cargo --offline deny check -g "$out" bans
               '';
 
@@ -861,24 +875,6 @@ in
               config.inputs.fenix.packages.${pkgs.system}.stable.rust-src
             }/lib/rustlib/src/rust/library";
           };
-      };
-
-      # TODO: Pull this out of the flakelight module?
-      perSystem = pkgs: {
-        checks.git-hooks = config.inputs.git-hooks.lib.${pkgs.system}.run {
-          inherit src;
-          hooks = {
-            convco.enable = true;
-
-            nix-flake-check = {
-              enable = true;
-              name = "nix flake check";
-              entry = "nix flake check -L";
-              pass_filenames = false;
-              stages = [ "pre-push" ];
-            };
-          };
-        };
       };
 
       # Here to enable `nix run .#update` to bump flake inputs for the module.
