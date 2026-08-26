@@ -11,26 +11,18 @@
   inputs = {
     flakelight.url = "github:nix-community/flakelight";
     flakelight-rust.url = "path:../..";
-    flakelight-treefmt = {
-      url = "github:m15a/flakelight-treefmt";
-      inputs.flakelight.follows = "flakelight";
-    };
   };
   outputs =
     {
       self,
       flakelight,
       flakelight-rust,
-      flakelight-treefmt,
       ...
     }:
     flakelight ./. (
       { lib, ... }:
       {
-        imports = [
-          flakelight-rust.flakelightModules.default
-          flakelight-treefmt.flakelightModules.default
-        ];
+        imports = [ flakelight-rust.flakelightModules.default ];
         inputs.self = self;
 
         systems = [
@@ -46,21 +38,8 @@
           ./deny.toml
         ];
 
-        # How to enable formatting too, not provided by the flakelight module
-        # intentionally maybe someday?
-        treefmtConfig = {
-          programs.nixfmt.enable = true;
-          programs.deadnix.enable = true;
-          programs.statix.enable = true;
-          programs.taplo.enable = true;
-
-          settings.global.excludes = [
-            "*/flake.lock"
-          ];
-        };
-
-        # No `binaries.*` here on purpose - this crate only builds a lib,
-        # `packages.default` picks that up via crane's generic buildPackage.
+        # No `binaries.*` entries here on purpose this is meant to demo a
+        # library only crate.
       }
     );
 }

@@ -20,26 +20,18 @@
   inputs = {
     flakelight.url = "github:nix-community/flakelight";
     flakelight-rust.url = "path:../..";
-    flakelight-treefmt = {
-      url = "github:m15a/flakelight-treefmt";
-      inputs.flakelight.follows = "flakelight";
-    };
   };
   outputs =
     {
       self,
       flakelight,
       flakelight-rust,
-      flakelight-treefmt,
       ...
     }:
     flakelight ./. (
       { lib, ... }:
       {
-        imports = [
-          flakelight-rust.flakelightModules.default
-          flakelight-treefmt.flakelightModules.default
-        ];
+        imports = [ flakelight-rust.flakelightModules.default ];
         inputs.self = self;
 
         systems = [
@@ -53,19 +45,6 @@
           (./. + /Cargo.lock)
           ./deny.toml
         ];
-
-        # How to enable formatting too, not provided by the flakelight module
-        # intentionally maybe someday?
-        treefmtConfig = {
-          programs.nixfmt.enable = true;
-          programs.deadnix.enable = true;
-          programs.statix.enable = true;
-          programs.taplo.enable = true;
-
-          settings.global.excludes = [
-            "*/flake.lock"
-          ];
-        };
 
         binaries = {
           # `agent` only needs `common` crate not the whole workspace.
@@ -132,9 +111,10 @@
             };
           };
 
-          # `engine` needs both `common` and `extra` crates and demonstrates plain
-          # cargo profile variants plus a CUDA build using custom `pkgs` attr set
-          # with cudaSupport enabled, restricted to Linux via `systems`.
+          # `engine` needs both `common` and `extra` crates and demonstrates
+          # cargo profile variants plus a CUDA build using a customized `pkgs`
+          # attr set with cudaSupport enabled, restricted to Linux via
+          # `systems`.
           engine = {
             crate = ./crates/engine;
             pathDeps = [

@@ -1,5 +1,5 @@
 [licenses]
-allow = ["MIT", "Apache-2.0", "BlueOak-1.0.0"]
+allow = ["BlueOak-1.0.0"]
 
 [bans]
 multiple-versions = "warn"

@@ -8,30 +8,22 @@
 {
   # I named it the same cause I'm a hack but just to be explicit this isn't
   # accelbreads flakelight-rust.
-  description = "mitchty/flakelight-rust minimal example";
+  description = "mitchty/flakelight-rust basic example";
   inputs = {
     flakelight.url = "github:nix-community/flakelight";
     flakelight-rust.url = "path:../..";
-    flakelight-treefmt = {
-      url = "github:m15a/flakelight-treefmt";
-      inputs.flakelight.follows = "flakelight";
-    };
   };
   outputs =
     {
       self,
       flakelight,
       flakelight-rust,
-      flakelight-treefmt,
       ...
     }:
     flakelight ./. (
       { lib, ... }:
       {
-        imports = [
-          flakelight-rust.flakelightModules.default
-          flakelight-treefmt.flakelightModules.default
-        ];
+        imports = [ flakelight-rust.flakelightModules.default ];
         inputs.self = self;
 
         systems = [
@@ -47,21 +39,11 @@
           ./deny.toml
         ];
 
-        # How to enable formatting too, not provided by the flakelight module
-        # intentionally maybe someday?
-        treefmtConfig = {
-          programs.nixfmt.enable = true;
-          programs.deadnix.enable = true;
-          programs.statix.enable = true;
-          programs.taplo.enable = true;
-
-          settings.global.excludes = [
-            "*/flake.lock"
-          ];
-        };
-
         # Be sure the "portable/static" binary is tested earlier.
-        binaries.minimal = {
+        #
+        # Do NOT rename this binary/crate back to "minimal"... again. Future
+        # mitch just trust past mitch ONCE. I even commented this fact.
+        binaries.basic = {
           variants = {
             default = { };
             portable = {

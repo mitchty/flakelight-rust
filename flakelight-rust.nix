@@ -318,7 +318,11 @@ in
       withOverlays = [
         config.inputs.fenix.overlays.default
         (final: prev: {
-          rustToolchain = config.inputs.fenix.packages.${prev.system}.stable.withComponents [
+          # Rust toolchain to have applied to the overlay. Used to be
+          # config.inputs.fenix.packages.${prev.system}.stable.withComponents
+          # but need to have the esp32 stuff work off of the nightly compiler
+          # and not stable. This is a for the future thing.
+          rustToolchain = prev.fenix.stable.withComponents [
             "cargo"
             "clippy"
             "llvm-tools"
@@ -333,6 +337,8 @@ in
       description = mkIf (tomlPackage ? description) tomlPackage.description;
       license = mkIf (tomlPackage ? license) (mkDefault tomlPackage.license);
       pname = tomlPackage.name or (mkDefault "cargo-workspace");
+
+      treefmtConfig.programs.taplo.enable = true;
 
       # Default native derivation, with dependency-only artifacts split out into
       # `cargoArtifacts` so that rebuilding your the crates code doesn't require
@@ -871,9 +877,9 @@ in
         env =
           { pkgs, ... }:
           {
-            RUST_SRC_PATH = "${
-              config.inputs.fenix.packages.${pkgs.system}.stable.rust-src
-            }/lib/rustlib/src/rust/library";
+            # Need to ensure `pkgs.fenix` from the overlay is in use for the
+            # devshell not the one off of fenix normally.
+            RUST_SRC_PATH = "${pkgs.fenix.stable.rust-src}/lib/rustlib/src/rust/library";
           };
       };
 

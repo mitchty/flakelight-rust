@@ -1,10 +1,6 @@
 #!/usr/bin/env sh
 #-*-mode: Shell-script; coding: utf-8;-*-
 # Description: Test all of this beast from the weasts examples.
-_base=$(basename "$0")
-_dir=$(cd -P -- "$(dirname -- "$(command -v -- "$0")")" && pwd -P || exit 126)
-export _base _dir
-
 set "${SETOPTS:--eu}"
 
 # Usage:
@@ -16,7 +12,7 @@ set "${SETOPTS:--eu}"
 #   scripts/test-examples.sh                        # test everything, latest, no persisting
 #   scripts/test-examples.sh multi-binary           # test just one example
 #   scripts/test-examples.sh --update-cargo-lock    # test everything, keep passing Cargo.lock updates staged in git
-root=$(git -C "$_dir" rev-parse --show-toplevel)
+root=$(git rev-parse --show-toplevel) || exit 126
 cd "$root" || exit 126
 
 update_cargo_lock=false

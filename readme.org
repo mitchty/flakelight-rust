@@ -15,7 +15,8 @@ Unlike [[https://github.com/accelbread/flakelight-rust][accelbread/flakelight-ru
   * cargo-deny to help detecting duplicate crates as well as license or dependency-graph drift
   * optional cargo-audit check via ~audit.enable~ against a rustsec advisory db input for CVE scanning
   * an ~update~ app to make day to day development updates easy
-- Treefmt setup and check integration
+- Optional treefmt and git hooks setup. Ref [[https://github.com/mitchty/flakelight-mitchty#extending-the-treefmt-setup-downstream][flakelight-mitchty's readme]] for how
+  to extend the treefmt setup further from your own flake if the defaults aren't enough.
 
 This is a bit of a POC for now, I will be dogfooding it for myself on my own projects first as that is where most of this nonsense originates from anyway. Basically I wanted to make my nix rust development much simpler when I start new projects as well as keep them in sync betwixt them all as it was getting a bit obscene the drift between disparate rust projects and given I am a nix fan and flakelight abuser might as well try fixing the DRY/WET problem at its source.
 
@@ -163,13 +164,13 @@ Just look at em if you got questions, they're intended to be more complete examp
 
 These are also what CI tests against so that if something breaks I can know in advance.
 
-~examples/minimal~
+~examples/basic~
 
 Probably what most might want to use, assumes a simple rust workspace setup. Tests out the portable derivations as well so failures happen sooner.
 
 ~examples/lib~
 
-Not really any different to ~examples/minimal~ but for a library-only crate example. Shows that ~packages.default~ and the whole ~checks~ set with clippy, doc, nextest, deny et al work for a plain lib crate.
+Not really any different to ~examples/basic~ but for a library-only crate example. Shows that ~packages.default~ and the whole ~checks~ set with clippy, doc, nextest, deny et al work for a plain lib crate.
 
 ~examples/multi-binary~
 
