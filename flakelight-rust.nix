@@ -173,6 +173,16 @@ in
                         '';
                       };
 
+                      craneLib = mkOption {
+                        type = lib.types.nullOr (lib.types.functionTo lib.types.attrs);
+                        default = null;
+                        description = ''
+                          Specify the `craneLib` to use for this variant derivation build. Likely unneeded unless you need to do something hokey af like build for an embedded target. Could also be used to have a variant target a nightly toolchain instead too I suppose. You do you bra.
+
+                          Used internally for esp32c3 development to swap out the default fenix cranelib with a rust derivation that can cross compile to the riscv esp32 target. Callers are responsible for owning the toolchain pins/fetches in their own flakes just like the `wasm.bindgencli` "not my problem sounds like a you problem" variable. You own it you bought it, I assume you know what you're doing with this variable.
+                        '';
+                      };
+
                       cargoProfile = mkOption {
                         type = lib.types.nullOr lib.types.str;
                         default = null;
@@ -581,7 +591,15 @@ in
                 pkgs = basePkgs;
               };
 
-              craneLibFor = mkCraneLibFor effectiveTarget pkgsFor;
+              craneLibFor =
+                if variantCfg.craneLib != null then
+                  variantCfg.craneLib {
+                    inherit lib system;
+                    target = effectiveTarget;
+                    pkgs = pkgsFor;
+                  }
+                else
+                  mkCraneLibFor effectiveTarget pkgsFor;
 
               injected = {
                 inherit lib system;

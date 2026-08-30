@@ -1,6 +1,29 @@
 [workspace]
 resolver = "2"
-members = ["crates/common", "crates/extra", "crates/agent", "crates/engine"]
+members = [
+  "crates/common",
+  "crates/extra",
+  "crates/agent",
+  "crates/engine",
+  "crates/firmware",
+  "crates/nostdlib",
+  "crates/dep",
+]
+# NB: The `firmware` crate should not be in `default-members` as its no_std.
+#
+# So this exmaple becomes a demonstration of both cargo workspace and crane/nix shenanigans of matching the cargo workspace member layout for dep calculations to build complex workspaces.
+#
+# Without this builds fail due to default builds trying to build the esp32 code
+# natively which doesn't do jack nor squat. Well it fails a lot. All for naught.
+# I've lost the comment plot. Anyway "this is how you do it"
+default-members = [
+  "crates/common",
+  "crates/extra",
+  "crates/agent",
+  "crates/engine",
+  "crates/nostdlib",
+  "crates/dep",
+]
 
 [workspace.package]
 version = "0.1.0"

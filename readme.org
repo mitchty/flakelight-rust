@@ -85,6 +85,10 @@ Suffix named build variant(s) of this binary. The ~default~ variant produces ~pa
   - ~pkgs~
     Nix function of ~{ pkgs, lib, system, target }~ returning the ~pkgs~ attrset to build the variant against
     Ex to enable CUDA on a pkgs attrset ~{ pkgs, system, ... }: import pkgs.path { inherit system; config.cudaSupport = true; }~
+  - ~craneLib~
+    Crane library to use if you need to bypass the default fenix toolchain. Only really useful for stuff like esp32 dev or targets that truly need to rip out the rustc toolchain entirely for cross compilation.
+
+    Used internally for esp32c3 evelopment against the riscv targets. xtensa arch will be ass to do so I'm deferring that to "future mitch". I don't need it right now though so not worried but the xtensa arch is a chungus of suck with the esp-rs xtensa rustc fork that I don't want to bother with right now.
   - ~cargoProfile~, ~rustflags~, ~extraCargoExtraArgs~
     Cargo profile name, set via ~CARGO_PROFILE~, ~RUSTFLAGS~, and args appended to ~cargoExtraArgs~ ex: ~--features foo/bar~.
   - ~env~, ~nativeBuildInputs~, ~buildInputs~
@@ -178,8 +182,16 @@ Demonstrates using ~binaries~ options with a Cargo workspace containing a shared
 
 ~examples/complect~
 
-Demonstrates most of the insanity this whole thing got built for  ~binaries.NAME.variants~ builds two binaries with different ~pathDeps~ for the shared crates, a Windows cross compile target, a wasm32 target with a caller-pinned ~wasm-bindgen-cli~, a CUDA variant using custom ~pkgs~, a static musl linux binary, a portable macos variant, and
-plain ~release~/~release-fast~ cargo-profile variants. Complecting most of what the module supports into one chungus cat example. This is built off of the insanity most of my crates seem to turn into lately somehow.
+Demonstrates most of the insanity this whole thing got built for  ~binaries.NAME.variants~ builds multiple binaries:
+- two sharing ~pathDeps~ for common crates with a Windows cross compile target
+- a wasm32 target with a caller-pinned ~wasm-bindgen-cli~
+- a CUDA variant using custom ~pkgs~ set
+- a static portable musl linux binary (non PIE for now)
+- a portable macos variant (note how I did it is sheer evil, it might be broken in weird ways)
+- separate derivations for cargo ~release~/~release-fast~ profile versions
+- an esp32 riscv firmware example via ~#![no_std]~ ~firmware~ able to run on an ~esp32c3~ board with a backing shared lib crate showing the crate can also be used for unit tests on the native platform.
+
+Thus complecting most of what the module supports into one chungus cat example. This is built off of the insanity most of my crates seem to turn into lately somehow for some dam reason.
 
 *** CI/Testing
 

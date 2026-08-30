@@ -1,0 +1,19 @@
+# Set this crate to use this build target separate from the workspace crates.
+[build]
+target = "riscv32imc-unknown-none-elf"
+
+[target.riscv32imc-unknown-none-elf]
+# Work around portable atomics not working. This example has only ran on an
+# esp32c3 which is single core so this is totes ok. But you should validate your
+# apps not trust some rando on the internets.
+rustflags = [
+  "--cfg",
+  "portable_atomic_unsafe_assume_single_core",
+  "-C",
+  "link-arg=-Tlinkall.x",
+  "-C",
+  "linker=rust-lld",
+]
+
+[env]
+ESP_LOG = "info"

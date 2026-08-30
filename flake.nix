@@ -100,10 +100,7 @@
     };
     flakelight-treefmt = {
       url = "github:m15a/flakelight-treefmt";
-      inputs = {
-        flakelight.follows = "flakelight";
-        nixpkgs.follows = "nixpkgs";
-      };
+      inputs.flakelight.follows = "flakelight";
     };
     flakelight-mitchty = {
       url = "github:mitchty/flakelight-mitchty";

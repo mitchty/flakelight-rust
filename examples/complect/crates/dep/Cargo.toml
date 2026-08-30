@@ -1,0 +1,16 @@
+[package]
+name = "dep"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "dep"
+path = "src/main.rs"
+
+[dependencies]
+common = { path = "../common" }
+# Pulls in `aws-lc-sys` as its native backend -- cmake/perl/(nasm on x86_64)
+# build deps. Stand-in for "any third-party crate with a hokey native
+# build", demonstrating how to wire one into a portable/static binary.
+aws-lc-rs = "1"

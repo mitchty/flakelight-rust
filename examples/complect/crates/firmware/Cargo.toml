@@ -1,0 +1,22 @@
+[package]
+name = "firmware"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "firmware"
+path = "src/main.rs"
+
+[dependencies]
+nostdlib = { path = "../nostdlib" }
+esp-hal = { version = "1", features = ["esp32c3", "unstable"] }
+esp-backtrace = { version = "0.20", features = [
+  "esp32c3",
+  "panic-handler",
+  "println",
+] }
+esp-println = { version = "0.18", features = ["esp32c3"] }
+# NB: 0.6 makes dep resolution insane and me angy, use old and busted
+# intentionally.
+esp-bootloader-esp-idf = { version = "0.5", features = ["esp32c3"] }

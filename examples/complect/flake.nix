@@ -20,16 +20,46 @@
   inputs = {
     flakelight.url = "github:nix-community/flakelight";
     flakelight-rust.url = "path:../..";
+    crane.url = "github:ipetkov/crane";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    nixpkgs.url = "github:nixos/nixpkgs";
   };
   outputs =
     {
       self,
       flakelight,
       flakelight-rust,
+      crane,
+      rust-overlay,
       ...
     }:
     flakelight ./. (
       { lib, ... }:
+      let
+        # Build an app for flashing a variant based on the firmeware build
+        # derivation name. aka `flash-${name}-${variant}` that way you could
+        # conceivably build multiple firmware targets and flash them separately
+        # to different boards. This example is complect enough as it is so this
+        # is "for show, like a pony". You know your needs I don't.
+        mkFlashApp =
+          name: variant:
+          { pkgs, ... }:
+          {
+            type = "app";
+            program = "${
+              pkgs.writeShellApplication {
+                name = "flash-${name}-${variant}";
+                runtimeInputs = [ pkgs.espflash ];
+                text = ''
+                  espflash flash --monitor "$@" "${pkgs."${name}-${variant}"}/bin/${name}"
+                '';
+              }
+            }/bin/flash-${name}-${variant}";
+          };
+      in
       {
         imports = [ flakelight-rust.flakelightModules.default ];
         inputs.self = self;
@@ -39,6 +69,8 @@
           "aarch64-linux"
           "aarch64-darwin"
         ];
+
+        withOverlays = [ rust-overlay.overlays.default ];
 
         fileset = lib.fileset.unions [
           (lib.fileset.fileFilter (f: f.hasExt "rs" || f.name == "Cargo.toml") ./.)
@@ -111,6 +143,37 @@
             };
           };
 
+          # This target derivation is here just to demonstrate you can even yeet
+          # in third party .a deps from in this case c into a fully static
+          # binary on linux and macos without dynamic linking.
+          #
+          # In this case its "just" the aws-lc-sys crypto crate dep. Pretty ezpz tbh.
+          #
+          # I can add more crazy later, but the default checks on the portable
+          # binary ensure there aren't any DYNAMIC or INTERP segments in the ELF
+          # binary or equivalent links on macos after build so this example
+          # working means its all good in the woods.
+          dep = {
+            crate = ./crates/dep;
+            pathDeps = [ ./crates/common ];
+
+            nativeBuildInputs =
+              { pkgs, lib, ... }:
+              [
+                pkgs.cmake
+                pkgs.perl
+              ]
+              ++ lib.optionals pkgs.stdenv.hostPlatform.isx86_64 [ pkgs.nasm ];
+
+            variants = {
+              default = { };
+
+              portable = {
+                portable = true;
+              };
+            };
+          };
+
           # `engine` needs both `common` and `extra` crates and demonstrates
           # cargo profile variants plus a CUDA build using a customized `pkgs`
           # attr set with cudaSupport enabled, restricted to Linux via
@@ -120,6 +183,7 @@
             pathDeps = [
               ./crates/common
               ./crates/extra
+              ./crates/nostdlib
             ];
 
             variants = {
@@ -170,7 +234,51 @@
               };
             };
           };
+
+          # `firmware` is a #![no_std] RISC-V ESP32 binary sharing the
+          # `nostdlib` crate with `engine` - see the `esp32c3` variant's
+          # `craneLib` for how the non-fenix nightly toolchain gets swapped
+          # in.
+          firmware = {
+            crate = ./crates/firmware;
+            pathDeps = [ ./crates/nostdlib ];
+
+            nativeBuildInputs = { pkgs, ... }: [ pkgs.espflash ];
+
+            variants = {
+              esp32c3 = {
+                target = "riscv32imc-unknown-none-elf";
+
+                # Keep in sync with crates/firmware/.cargo/config.toml's
+                # rustflags, this is the nix-build-time copy of the same
+                # portable-atomic/esp-hal single-core-atomics workaround.
+                #
+                # Do NOT add `-C target-feature=+a`: that tells
+                # portable-atomic the target has real atomics, which makes
+                # it reject `portable_atomic_unsafe_assume_single_core` as
+                # inapplicable and hard error instead. beepbeepimmajeep's
+                # working flake.nix never sets it for this exact reason.
+                rustflags = lib.concatStringsSep " " [
+                  "--cfg portable_atomic_unsafe_assume_single_core"
+                  "-C link-arg=-Tlinkall.x"
+                  "-C linker=rust-lld"
+                ];
+
+                craneLib =
+                  { pkgs, target, ... }:
+                  let
+                    toolchain = pkgs.rust-bin.nightly.latest.default.override {
+                      targets = [ target ];
+                      extensions = [ "rust-src" ];
+                    };
+                  in
+                  (crane.mkLib pkgs).overrideToolchain (_: toolchain);
+              };
+            };
+          };
         };
+
+        apps."flash-firmware-esp32c3" = mkFlashApp "firmware" "esp32c3";
       }
     );
 }
