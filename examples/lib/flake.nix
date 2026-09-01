@@ -40,6 +40,12 @@
 
         # No `binaries.*` entries here on purpose this is meant to demo a
         # library only crate.
+
+        # This can go anywhere but makes the most sense for a lib crate. You
+        # likely want to benchmark library functions more than others.
+        #
+        # You'd run it via nix run .#libonly-bench
+        benchmarks.libonly = { };
       }
     );
 }

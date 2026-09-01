@@ -317,6 +317,28 @@ in
         )
       );
     };
+
+    # They aren't *RUN* here, that happens in `apps.NAME-bench` outside of the
+    # nix build sandbox. So they are run closer to what you'd get if you ran
+    # cargo bench directly.
+    benchmarks = mkOption {
+      default = { };
+      description = "Criterion`cargo bench` benchmark derivations, `checks.NAME-bench-compile` and `apps.NAME-bench` pairs.";
+      type = lib.types.attrsOf (
+        lib.types.submodule (
+          { name, ... }:
+          {
+            options = {
+              cargoExtraArgs = mkOption {
+                type = lib.types.str;
+                default = "-p ${name}";
+                description = "Extra args to pass into cargo for the derivations cargo invocation.";
+              };
+            };
+          }
+        )
+      );
+    };
   };
 
   config = mkMerge [
@@ -431,7 +453,27 @@ in
             inherit (commonArgs) src;
             advisory-db = config.inputs.advisory-db;
           };
-        };
+        }
+        // (
+          # Map each named bench derivation into a package derivation and apps
+          # derivation for running outside of the nix sandbox. Note, the package
+          # derivation doesn't run things intentionally.
+          lib.mapAttrs' (
+            name: bench:
+            lib.nameValuePair "${name}-bench-compile" (
+              craneLib.mkCargoDerivation (
+                commonArgs
+                // {
+                  inherit cargoArtifacts;
+                  pnameSuffix = "-bench-compile-${name}";
+                  buildPhaseCargoCommand = "";
+                  checkPhaseCargoCommand = "cargo bench ${bench.cargoExtraArgs} --no-run";
+                  doCheck = true;
+                }
+              )
+            )
+          ) config.benchmarks
+        );
 
       # Extra flake outputs: cargo-deny, dotdeps, and one derivation per
       # `binaries.<name>.variants.<variant>` entry (windows cross builds
@@ -886,6 +928,7 @@ in
             cargo-nextest
             cargo-deny
             cargo-bloat
+            cargo-criterion
             # For `jeprof` call graphs using jemalloc-pprof-style profiling dumps
             ghostscript
           ];
@@ -901,50 +944,78 @@ in
           };
       };
 
-      # Here to enable `nix run .#update` to bump flake inputs for the module.
-      #
-      # TODO: I should enable this to work with cargo upgrade too...
-      apps.update =
-        { pkgs, ... }:
-        {
-          type = "app";
-          program = "${
-            pkgs.writeShellApplication {
-              name = "update";
-              text = ''
-                ${pkgs.nix}/bin/nix flake update
-              '';
+      # Foreach NAME-bench nix app we map to benchmarks.NAME derivations. The
+      # benchmark targets bascially "just build", the app runs it
+      # TODO: Future me, alongside size recording I should add in benchmark
+      # recording too saved as json or whatever.
+      apps =
+        (lib.mapAttrs' (
+          name: bench:
+          lib.nameValuePair "${name}-bench" (
+            { pkgs, ... }:
+            {
+              type = "app";
+              program = "${
+                pkgs.writeShellApplication {
+                  name = "${name}-bench";
+                  runtimeInputs = [
+                    pkgs.rustToolchain
+                    pkgs.cargo-criterion
+                  ];
+                  text = ''
+                    exec cargo criterion ${bench.cargoExtraArgs} "$@"
+                  '';
+                }
+              }/bin/${name}-bench";
             }
-          }/bin/update";
-        };
+          )
+        ) config.benchmarks)
+        // {
+          # Here to enable `nix run .#update` to bump flake inputs for the module.
+          #
+          # TODO: I should enable this to work with cargo upgrade too...
+          update =
+            { pkgs, ... }:
+            {
+              type = "app";
+              program = "${
+                pkgs.writeShellApplication {
+                  name = "update";
+                  text = ''
+                    ${pkgs.nix}/bin/nix flake update
+                  '';
+                }
+              }/bin/update";
+            };
 
-      # Opens the cargo-deny duplicate-dep graphs output in a browser/viewer if
-      # any were generated, otherwise says so and no-ops out as a non failure.
-      #
-      # TODO: Should maybe make the default if not in a gui setup to just dump dir?
-      apps.dotdeps =
-        {
-          pkgs,
-          ...
-        }:
-        let
-          opener = if pkgs.stdenv.hostPlatform.isDarwin then "open" else "xdg-open";
-        in
-        {
-          type = "app";
-          program = "${
-            pkgs.writeShellApplication {
-              name = "dotdeps";
-              text = ''
-                dir="${pkgs.dotdeps}/graph_output"
-                if [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
-                  printf "no duplicate cargo deps found in %s, nothing to do.\n" "$dir" >&2
-                else
-                  ${opener} "$dir"
-                fi
-              '';
-            }
-          }/bin/dotdeps";
+          # Opens the cargo-deny duplicate-dep graphs output in a browser/viewer if
+          # any were generated, otherwise says so and no-ops out as a non failure.
+          #
+          # TODO: Should maybe make the default if not in a gui setup to just dump dir?
+          dotdeps =
+            {
+              pkgs,
+              ...
+            }:
+            let
+              opener = if pkgs.stdenv.hostPlatform.isDarwin then "open" else "xdg-open";
+            in
+            {
+              type = "app";
+              program = "${
+                pkgs.writeShellApplication {
+                  name = "dotdeps";
+                  text = ''
+                    dir="${pkgs.dotdeps}/graph_output"
+                    if [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
+                      printf "no duplicate cargo deps found in %s, nothing to do.\n" "$dir" >&2
+                    else
+                      ${opener} "$dir"
+                    fi
+                  '';
+                }
+              }/bin/dotdeps";
+            };
         };
     })
   ];
