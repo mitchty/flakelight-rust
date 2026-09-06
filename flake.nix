@@ -47,10 +47,10 @@
         ];
 
         gitHooks.hooks = lib.mkAfter {
-          check-examples = {
+          ci = {
             enable = true;
-            name = "check examples";
-            entry = "scripts/test-examples.sh";
+            name = "ci";
+            entry = "nix run .#ci --";
             pass_filenames = false;
             stages = [ "pre-push" ];
           };
@@ -71,23 +71,25 @@
         devShell.packages = pkgs: [ pkgs.nil ];
 
         # Needs network so this can't live in `checks` which build sandboxed.
-        # nix run .#check-examples
-        apps.check-examples =
+        # simply checks that every example can build/run nix flake check. Meant
+        # more for ci but runnable whenever.
+        # nix run .#ci
+        apps.ci =
           { pkgs, ... }:
           {
             type = "app";
             program = "${
               pkgs.writeShellApplication {
-                name = "check-examples";
+                name = "ci";
                 runtimeInputs = [
                   pkgs.nix
                   pkgs.git
                 ];
                 text = ''
-                  exec ${./scripts/test-examples.sh} "$@"
+                  exec ${./scripts/ci-examples.sh} "$@"
                 '';
               }
-            }/bin/check-examples";
+            }/bin/ci";
           };
       }
     );

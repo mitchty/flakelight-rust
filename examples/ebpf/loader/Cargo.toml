@@ -1,0 +1,30 @@
+[package]
+name = "loader"
+version = "0.1.0"
+edition = "2024"
+license = "BlueOak-1.0.0"
+description = "Simple eBPF object code userspace loader using aya.rs"
+
+[[bin]]
+name = "loader"
+path = "src/main.rs"
+
+[features]
+# When enabled will embed the kprobe cargo crates eBPF object code into the
+# built binary.
+embedded = []
+
+[dependencies]
+aya = "=0.14.0"
+aya-log = "=0.3.0"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+env_logger = "0.11"
+log = "0.4"
+libc = "0.2"
+tokio = { version = "1", features = [
+  "macros",
+  "rt-multi-thread",
+  "signal",
+  "net",
+] }

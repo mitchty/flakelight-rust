@@ -1,0 +1,21 @@
+[package]
+name = "kprobe"
+version = "0.1.0"
+edition = "2021"
+license = "BlueOak-1.0.0"
+description = "eBPF kprobe program to hook a kernel function call with aya-rs"
+
+[[bin]]
+name = "kprobe"
+path = "src/main.rs"
+
+[dependencies]
+aya-ebpf = "=0.2.0"
+aya-log-ebpf = "=0.2.0"
+
+[profile.release]
+# Keep release small, don't add optimization: another source of
+# BPF_PROG_LOAD failures according to docs.
+panic = "abort"
+codegen-units = 1
+debug = false
