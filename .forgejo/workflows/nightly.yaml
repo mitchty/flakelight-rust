@@ -1,0 +1,23 @@
+name: Nightly Example Update Check
+
+on:
+  schedule:
+    - cron: "21 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  nightly:
+    name: nightly
+    runs-on: nix
+    steps:
+      - name: Checkout code
+        uses: https://data.forgejo.org/actions/checkout@v4
+
+      - name: Bump example locks to latest
+        run: nix run .#update-examples
+
+      - name: Run flake check
+        run: nix flake check -L
+
+      - name: Run example checks
+        run: nix run .#ci
