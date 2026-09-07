@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: "ci-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  flake-check:
+    name: flake check
+    runs-on: nix
+    steps:
+      # Fully-qualified so this doesn't silently depend on wherever this
+      # instance's DEFAULT_ACTIONS_URL happens to point today.
+      - name: Checkout code
+        uses: https://data.forgejo.org/actions/checkout@v4
+
+      - name: Run flake check
+        run: nix flake check -L
+
+  example-check:
+    name: example check
+    runs-on: nix
+    steps:
+      - name: Checkout code
+        uses: https://data.forgejo.org/actions/checkout@v4
+
+      - name: Run example checks
+        run: nix run .#ci

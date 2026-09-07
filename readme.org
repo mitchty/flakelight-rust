@@ -180,6 +180,10 @@ Not really any different to ~examples/basic~ but for a library-only crate exampl
 
 Demonstrates using ~binaries~ options with a Cargo workspace containing a shared library crate and two binaries as a more complex example.
 
+~examples/ebpf~
+
+Demonstrates using ~binaries~ and custom workspaces and a split between an ebpf only crate, and a static binary loader that embeds the ebpf binary. Also shows a nixos integration test to demonstrate runtime validation that everything still works in a nixos vm.
+
 ~examples/complect~
 
 Demonstrates most of the insanity this whole thing got built for  ~binaries.NAME.variants~ builds multiple binaries:
@@ -193,16 +197,12 @@ Demonstrates most of the insanity this whole thing got built for  ~binaries.NAME
 
 Thus complecting most of what the module supports into one chungus cat example. This is built off of the insanity most of my crates seem to turn into lately somehow for some dam reason.
 
-*** CI/Testing
+*** CI/Testing Notables
 
-This is a bit of a WIP but scripts/test-examples.sh is there to act as an integration test gate for this whole kit-n-kaboodle.
-
-Current strategy is each example has no flake.nix so that every time the ci is ran the latest inputs are tested nix wise.
-
-Cargo is different in that way CI can test automating updating cargo dep updates. The lock files are generally ignored. The idea is to test nix updates against known working cargo deps, then updating/testing cargo updates with the same.
+~scripts/ci-examples.sh~ ~nix run .#ci~ Just tests out all examples in serial to make sure they work/build.
+~scripts/update-examples.sh~ ~nix run .#update-examples~ Just bumps all the example nix and cargo deps. Thats it. Meant to be ran before ^^^ periodically to make sure all the example crap still works with whatever the latest of nix/cargo dependencies is. If/when it fails I will either fix the examples or update the flake I guess. Or the update script.
 
 #+begin_src sh
-scripts/test-examples.sh                      # test every example against latest then revert
-scripts/test-examples.sh multi-binary         # just test one example
-scripts/test-examples.sh --update-cargo-lock  # test everything, keep passing Cargo.lock updates in git
+nix run .#ci
+nix run .#update-examples
 #+end_src

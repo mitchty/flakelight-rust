@@ -12,9 +12,6 @@
 # Note the `engine.cuda` variant is Linux-only and is excluded from ci runs
 # since building `cudaPackages` from source on a resource-constrained hosted
 # runner isn't realistic for github runners.
-#
-# `scripts/test-examples.sh` can still run it though for anyone testing locally
-# or on a beefier self-hosted runner of doooooom.
 {
   description = "mitchty/flakelight-rust complect aka kitchen-sink example";
   inputs = {

@@ -68,7 +68,10 @@
             inputs.advisory-db = lib.mkDefault advisory-db;
           };
 
-        devShell.packages = pkgs: [ pkgs.nil ];
+        devShell.packages = pkgs: [
+          pkgs.nil
+          pkgs.cargo
+        ];
 
         # Needs network so this can't live in `checks` which build sandboxed.
         # simply checks that every example can build/run nix flake check. Meant
@@ -90,6 +93,28 @@
                 '';
               }
             }/bin/ci";
+          };
+
+        # Here for ci to update example deps to make sure everything still
+        # works. Obvs needs network.
+        # nix run .#update-examples
+        apps.update-examples =
+          { pkgs, ... }:
+          {
+            type = "app";
+            program = "${
+              pkgs.writeShellApplication {
+                name = "update-examples";
+                runtimeInputs = [
+                  pkgs.nix
+                  pkgs.git
+                  pkgs.cargo
+                ];
+                text = ''
+                  exec ${./scripts/update-examples.sh} "$@"
+                '';
+              }
+            }/bin/update-examples";
           };
       }
     );
