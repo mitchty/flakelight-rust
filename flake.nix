@@ -109,6 +109,7 @@
                   pkgs.nix
                   pkgs.git
                   pkgs.cargo
+                  pkgs.nix-update
                 ];
                 text = ''
                   exec ${./scripts/update-examples.sh} "$@"
