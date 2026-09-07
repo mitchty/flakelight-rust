@@ -16,8 +16,6 @@ jobs:
     name: flake check
     runs-on: nix
     steps:
-      # Fully-qualified so this doesn't silently depend on wherever this
-      # instance's DEFAULT_ACTIONS_URL happens to point today.
       - name: Checkout code
         uses: https://data.forgejo.org/actions/checkout@v4
 

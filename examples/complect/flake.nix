@@ -110,31 +110,7 @@
                   # never ships one as its version must track whatever the
                   # crate's own `wasm-bindgen` dependency needs anyway so there
                   # is no real point to.
-                  bindgenCli =
-                    { pkgs, lib }:
-                    pkgs.rustPlatform.buildRustPackage rec {
-                      pname = "wasm-bindgen-cli";
-                      version = "0.2.122";
-
-                      src = pkgs.fetchCrate {
-                        inherit pname version;
-                        hash = "sha256-vO4RSxi/sMWxmsEs3GuljdMfIRSu75A+Q+c5wgYToRU=";
-                      };
-                      cargoHash = "sha256-Inup6vvJSG5ghNyeDPyZbfZo4d0LsMG2OJfStoaeDBs=";
-
-                      nativeBuildInputs = [ pkgs.pkg-config ];
-                      buildInputs = [
-                        pkgs.openssl
-                      ]
-                      ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.apple-sdk ];
-
-                      checkFlags = [ "--skip=reference::tests::works" ];
-
-                      meta = {
-                        description = "CLI tool for wasm-bindgen";
-                        mainProgram = "wasm-bindgen";
-                      };
-                    };
+                  bindgenCli = { pkgs, ... }: pkgs.wasm-bindgen-cli;
                 };
               };
             };
