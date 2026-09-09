@@ -1,0 +1,16 @@
+[package]
+name = "openssl-binary"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "openssl-binary"
+path = "src/main.rs"
+
+[dependencies]
+openssl = "0.10"
+
+[features]
+# With openssl its easier to "just" use the vendored openssl stuff so we do too.
+vendored = ["openssl/vendored"]

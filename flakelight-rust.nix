@@ -339,6 +339,39 @@ in
         )
       );
     };
+
+    # Workspace level inputs and env setup for things like the doc/clippy type
+    # derivations which are independent of any binary derivations.
+    #
+    # This is here mostly if you need to add in something like libssl et al and
+    # cargo doc needs that to build/link/compile to actually give you doc
+    # outputs. Largely mimics how the binary setups work.
+    nativeBuildInputs = mkOption {
+      type = lib.types.functionTo (lib.types.listOf lib.types.package);
+      default = _: [ ];
+      description = "Extra nativeBuildInputs for workspace `package` and `checks` outputs.";
+    };
+
+    buildInputs = mkOption {
+      type = lib.types.functionTo (lib.types.listOf lib.types.package);
+      default = _: [ ];
+      description = "Extra buildInputs for workspace `package` and `checks` outputs.";
+    };
+
+    env = mkOption {
+      type = lib.types.functionTo lib.types.attrs;
+      default = _: { };
+      description = "Extra env vars for workspace `package` and `checks` outputs.";
+    };
+
+    # Simple way to change what .#default is, meant to make it easy to point to
+    # one of the binary variant derivations versus pointing at the default
+    # workspace derivation which may not be what you want.
+    defaultBinary = mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Name of a `binaries.<name>` entry whose default variant becomes `packages.default`, instead of the generic whole-workspace `package`.";
+    };
   };
 
   config = mkMerge [
@@ -376,9 +409,38 @@ in
       # `cargoArtifacts` so that rebuilding your the crates code doesn't require
       # rebuilding every cargo dep needlessly/incessantly. Kinda the whole
       # reason for this chungus, I hate rebuilding deps constantly.
-      package =
-        { craneLib, defaultMeta }:
+
+      # NB: The .#default package only gets setup when the user hasn't set one
+      # explicitly. The whole idea here is "make things possible but make people
+      # be explicit about what they are asking for". Not trying to be "too" cute
+      # with this all.
+      package = mkIf (config.defaultBinary == null) (
+        {
+          craneLib,
+          defaultMeta,
+          pkgs,
+          lib,
+          system,
+        }:
         let
+          injected = {
+            inherit
+              pkgs
+              lib
+              system
+              craneLib
+              ;
+          };
+          resolvedNativeBuildInputs = config.nativeBuildInputs injected;
+          resolvedBuildInputs = config.buildInputs injected;
+          # Here to let `env` et al to work with things like LD_LIBRARY_PATH and
+          # other interpolation and merging. Same crap that `binaries.NAME.env` does.
+          # TODO: Future mitch, WET vs DRY? For now its fine it works I have
+          # other things to do.
+          resolvedInjected = injected // {
+            nativeBuildInputs = resolvedNativeBuildInputs;
+            buildInputs = resolvedBuildInputs;
+          };
           commonArgs = {
             src = toSource {
               root = src;
@@ -388,6 +450,9 @@ in
             inherit (config) pname;
             version = tomlPackage.version or "0.0.0";
             strictDeps = true;
+            nativeBuildInputs = resolvedNativeBuildInputs;
+            buildInputs = resolvedBuildInputs;
+            env = config.env resolvedInjected;
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
         in
@@ -397,11 +462,32 @@ in
             inherit cargoArtifacts;
             meta = defaultMeta;
           }
-        );
+        )
+      );
 
       checks =
-        { craneLib, ... }:
+        {
+          craneLib,
+          pkgs,
+          lib,
+          system,
+          ...
+        }:
         let
+          injected = {
+            inherit
+              pkgs
+              lib
+              system
+              craneLib
+              ;
+          };
+          resolvedNativeBuildInputs = config.nativeBuildInputs injected;
+          resolvedBuildInputs = config.buildInputs injected;
+          resolvedInjected = injected // {
+            nativeBuildInputs = resolvedNativeBuildInputs;
+            buildInputs = resolvedBuildInputs;
+          };
           commonArgs = {
             src = toSource {
               root = src;
@@ -410,6 +496,9 @@ in
             inherit (config) pname;
             version = tomlPackage.version or "0.0.0";
             strictDeps = true;
+            nativeBuildInputs = resolvedNativeBuildInputs;
+            buildInputs = resolvedBuildInputs;
+            env = config.env resolvedInjected;
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
         in
@@ -426,7 +515,9 @@ in
             commonArgs
             // {
               inherit cargoArtifacts;
-              env.RUSTDOCFLAGS = "--deny warnings";
+              env = commonArgs.env // {
+                RUSTDOCFLAGS = "--deny warnings";
+              };
             }
           );
 
@@ -913,7 +1004,13 @@ in
               '';
             };
         }
-        // binaryOutputs;
+        // binaryOutputs
+        // lib.optionalAttrs (config.defaultBinary != null) {
+          default =
+            binaryOutputs.${config.defaultBinary} or (throw ''
+              flakelight-rust: defaultBinary "${config.defaultBinary}" has no default variant. Check that binaries.${config.defaultBinary}.variants.default exists somewhere.
+            '');
+        };
 
       # Note for now this is a batteries included setup. That means profiling
       # targets work with all that bs too for whatever its needed for. I end up

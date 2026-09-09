@@ -1,0 +1,15 @@
+* examples/multi-binary
+
+Demonstrates using ~binaries~ options with a Cargo workspace containing a shared library crate and two binaries as a more complex example.
+
+#+begin_src sh
+cd examples/multi-binary
+nix flake check -L
+#+end_src
+
+As there are 2 binaries, you gotta specify what to run, the default flake derivation is ~cli~.
+
+#+begin_src sh
+nix run .#cli
+nix run .#server
+#+end_src

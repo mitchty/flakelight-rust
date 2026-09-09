@@ -1,0 +1,8 @@
+* examples/lib
+
+Not really any different to ~examples/basic~ but for a library only crate example. Shows ~packages.default~ and the whole ~checks~ set with clippy, doc, nextest, deny et al work for a plain olde lib crate. Nothing to ~nix run~ here as its a library only crate.
+
+#+begin_src sh
+cd examples/lib
+nix flake check -L
+#+end_src

@@ -3,26 +3,30 @@
 Highly opinionated nix flakelight module for rust development using [[https://github.com/nix-community/flakelight][flakelight]], built on top of [[https://github.com/ipetkov/crane][crane]] + [[https://github.com/nix-community/fenix][fenix]] behind the scenes for the rust toolchain shenanigans.
 
 Unlike [[https://github.com/accelbread/flakelight-rust][accelbread/flakelight-rust]] which is naersk-based and constrained to nixpkgs rust and overall toolchain setup, this module enables more easy setup of things like:
-- Pinned/tracked fenix toolchain for customizing the rust version in use
+- Pinned/tracked fenix toolchain for customizing the rust version in use via flake inputs
 - Windows cross-compilation to ~x86_64-pc-windows-gnu~ via mingw64, note Linux only
 - Ability to easily customize rust binary targets to be fully static for Linux, static...ish for macos
 - Ability to easily setup tracing/profiling targets
-- Easy ability to add wasm targets as well for crates so that native and wasm are treated as equals
+- Easy ability to add wasm32 targets as well for crates so that native and wasm are treated as equals
 - A default more "development" checks/devShell set for interactive builds ie:
   * clippy is setup to deny warnings for release profile builds
   * cargo doc also setup to deny warnings for any documentation
   * cargo-nextest to allow for easy unit test integration
   * cargo-deny to help detecting duplicate crates as well as license or dependency-graph drift
-  * optional cargo-audit check via ~audit.enable~ against a rustsec advisory db input for CVE scanning
+  * optional cargo-audit check via ~audit.enable~ against a rustsec advisory db input for CVE scanning of cargo deps
   * an ~update~ app to make day to day development updates easy
 - Optional treefmt and git hooks setup. Ref [[https://github.com/mitchty/flakelight-mitchty#extending-the-treefmt-setup-downstream][flakelight-mitchty's readme]] for how
   to extend the treefmt setup further from your own flake if the defaults aren't enough.
 
-This is a bit of a POC for now, I will be dogfooding it for myself on my own projects first as that is where most of this nonsense originates from anyway. Basically I wanted to make my nix rust development much simpler when I start new projects as well as keep them in sync betwixt them all as it was getting a bit obscene the drift between disparate rust projects and given I am a nix fan and flakelight abuser might as well try fixing the DRY/WET problem at its source.
+I've used this personally to simplify all of my own project development. So if you see me committing changes in here, there is a good chance I just migrated another of my own repos to using this and found a gap.
 
-** Options (WIP I threw in all the crap I abuse for now)
+I've converted over almost all the "weird crap" I have at this point and this module is "mostly feature complete" The examples are intended to be the best documentation. I also test out that the examples update to the latest nix/cargo versions too nightly in my home forgejo instance. I don't update the exmaple lock files cause thats silly unnecessary git churn. But at this point I consider this decent enough for other people to try.
 
-Note the exmaples dir is probably the best source of how you can use this.
+Note, there is a good chance I haven't made this quite right in regards to trying to merge treefmt between multiple flakelight modules yet. If its broken I'll fix it here too. Let me know if anythings horked bad.
+
+** Options
+
+Note the examples dir is the best source of how you can use this module in a flake of your own.
 
 *** ~fileset~
 
@@ -107,29 +111,7 @@ Suffix named build variant(s) of this binary. The ~default~ variant produces ~pa
   - ~meta~
     Simply merged on top of ~defaultMeta~ if provided to set any meta attrsets.
 
-As a silly example, a binary needing the mold linker on linux and a crate that needs to link against OpenSSL say for something that uses the aws-lc-sys crate (where this fragment comes from actually):
-
-#+begin_src nix
-{
-  binaries.server = {
-    nativeBuildInputs = { pkgs, lib, ... }:
-      [ pkgs.openssl ]
-      ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.mold pkgs.pkg-config ];
-
-    env = { pkgs, lib, buildInputs, ... }: {
-      OPENSSL_DIR = "${pkgs.openssl.dev}";
-      OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
-      OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include/";
-      LD_LIBRARY_PATH = "$LD_LIBRARY_PATH:${lib.makeLibraryPath buildInputs}";
-      RUSTFLAGS = "" + lib.optionalString pkgs.stdenv.isLinux "-C link-arg=-fuse-ld=mold ";
-    };
-  };
-}
-#+end_src
-
-See ~examples/multi-binary~ for a trivial example of two binaries sharing a library crate workspace example.
-
-For a more complect, yes its a valid english word and no I am not apologizing for using it I'm bringing fetch back dammit, example refer to ~examples/complect~ for a more complex example that braids/weaves/plaits together ~pathDeps~, a Windows cross compile target, a wasm32 target with provided ~wasm-bindgen-cli~, a CUDA derivation variant using a custom ~pkgs~ set, a static linux and "portable" macos variant, and lastly a cargo-profile variants all at once as a deluge of insanity this whole thing tries to make "simple not easy" like Rich Hickey's talk ages ago.
+See [[file:examples/openssl/readme.org][examples/openssl]] for an example of how one can use OpenSSL with this shenanigans. See [[file:examples/multi-binary/readme.org][examples/multi-binary]] for a trivial example of two binaries sharing a library crate workspace. For a more complect, yes its a valid english word and no I am not apologizing for using it I'm bringing fetch/complect back dammit, example refer to [[file:examples/complect/readme.org][examples/complect]] for an example that braids/weaves/plaits together ~pathDeps~, a Windows cross compile target, a wasm32 target with provided ~wasm-bindgen-cli~, a CUDA derivation variant using a custom ~pkgs~ set, a static linux, a "portable" macos variant, and lastly a cargo-profile variant all at once as a deluge of insanity this whole thing tries to make "simple not easy" like Rich Hickey's talk from ages ago.
 
 ** Flake Example
 
@@ -166,43 +148,39 @@ nix build --override-input flakelight-rust path:/absolute/path/to/flakelight-rus
 
 Just look at em if you got questions, they're intended to be more complete examples that a human could figure it out if they're nix language capable. Otherwise ask Avian Intelligence to figure it out for you I guess I dunno man you do you. Or annoy me with a PR or issue if something stupids wrong/broken. I'm not perfect just annoyed with doing the same crap all the time across my rust repos.
 
-These are also what CI tests against so that if something breaks I can know in advance.
+These are also what CI tests against so that if something breaks I can know in advance. Each has its own readme.org with the full details:
 
-~examples/basic~
-
-Probably what most might want to use, assumes a simple rust workspace setup. Tests out the portable derivations as well so failures happen sooner.
-
-~examples/lib~
-
-Not really any different to ~examples/basic~ but for a library-only crate example. Shows that ~packages.default~ and the whole ~checks~ set with clippy, doc, nextest, deny et al work for a plain lib crate.
-
-~examples/multi-binary~
-
-Demonstrates using ~binaries~ options with a Cargo workspace containing a shared library crate and two binaries as a more complex example.
-
-~examples/ebpf~
-
-Demonstrates using ~binaries~ and custom workspaces and a split between an ebpf only crate, and a static binary loader that embeds the ebpf binary. Also shows a nixos integration test to demonstrate runtime validation that everything still works in a nixos vm.
-
-~examples/complect~
-
-Demonstrates most of the insanity this whole thing got built for  ~binaries.NAME.variants~ builds multiple binaries:
-- two sharing ~pathDeps~ for common crates with a Windows cross compile target
-- a wasm32 target with a caller-pinned ~wasm-bindgen-cli~
-- a CUDA variant using custom ~pkgs~ set
-- a static portable musl linux binary (non PIE for now)
-- a portable macos variant (note how I did it is sheer evil, it might be broken in weird ways)
-- separate derivations for cargo ~release~/~release-fast~ profile versions
-- an esp32 riscv firmware example via ~#![no_std]~ ~firmware~ able to run on an ~esp32c3~ board with a backing shared lib crate showing the crate can also be used for unit tests on the native platform.
-
-Thus complecting most of what the module supports into one chungus cat example. This is built off of the insanity most of my crates seem to turn into lately somehow for some dam reason.
+- [[file:examples/basic/readme.org][examples/basic]]
+- [[file:examples/openssl/readme.org][examples/openssl]]
+- [[file:examples/lib/readme.org][examples/lib]]
+- [[file:examples/multi-binary/readme.org][examples/multi-binary]]
+- [[file:examples/ebpf/readme.org][examples/ebpf]]
+- [[file:examples/complect/readme.org][examples/complect]]
 
 *** CI/Testing Notables
 
-~scripts/ci-examples.sh~ ~nix run .#ci~ Just tests out all examples in serial to make sure they work/build.
-~scripts/update-examples.sh~ ~nix run .#update-examples~ Just bumps all the example nix and cargo deps. Thats it. Meant to be ran before ^^^ periodically to make sure all the example crap still works with whatever the latest of nix/cargo dependencies is. If/when it fails I will either fix the examples or update the flake I guess. Or the update script.
+This repos fully automated/validated based off of the examples. I consider the examples basically an api until themselves. You too can run the same crap as ci if you want.
+
+To update example nix locks and cargo dependencies, note for the latter within the SEMVER spec it won't update to the latest of every dep in each repo.
+
+#+begin_src sh
+nix run .#update-examples
+#+end_src
+
+And then to test out all the examples build still or not:
 
 #+begin_src sh
 nix run .#ci
-nix run .#update-examples
 #+end_src
+
+You can run the latter commmand with specific examples too optionally like so:
+
+#+begin_src sh
+nix run .#ci -- multi-binary basic
+#+end_src
+
+Thats basically what forgejo does for me nightly now. But if you want to test out changes and PR em this is how I'd test them out. Also if its complex enough or well scoped enough its probalby good to add an example. While complect is crazy, it was getting big enough so I started splitting things into more targeted examples like openssl and ebpf. That was more for simplicity and understanding. Maybe I make a chungus example that does literally everything in one repo.
+
+* License
+
+Blue Oak 1.0 for everything as is personal tradition.

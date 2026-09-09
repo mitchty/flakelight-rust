@@ -1,0 +1,9 @@
+* examples/basic
+
+Probably what most might want to use, assumes a simple rust workspace setup. Tests out the portable derivations as well so failures happen sooner.
+
+#+begin_src sh
+cd examples/basic
+nix flake check -L
+nix run
+#+end_src

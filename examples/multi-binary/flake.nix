@@ -30,12 +30,15 @@
           "aarch64-darwin"
         ];
 
-        # Provide a loosey goose deny.toml setup.
+        # Provide a loosey goosey deny.toml setup.
         fileset = lib.fileset.unions [
           (lib.fileset.fileFilter (f: f.hasExt "rs" || f.name == "Cargo.toml") ./.)
           (./. + /Cargo.lock)
           ./deny.toml
         ];
+
+        # Make `.#default` and `packages.default` the `cli` derivation for this flake.
+        defaultBinary = "cli";
 
         # The server binary is built for windows, the cli only for current platform.
         binaries = {

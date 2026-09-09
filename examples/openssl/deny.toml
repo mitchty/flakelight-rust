@@ -1,0 +1,9 @@
+[licenses]
+allow = ["BlueOak-1.0.0", "Apache-2.0", "MIT", "Unicode-3.0"]
+
+[bans]
+multiple-versions = "warn"
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"

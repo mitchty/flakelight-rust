@@ -1,0 +1,12 @@
+* examples/openssl
+
+Demonstrates how you can setup a workspace using OpenSSL two ways:
+
+- ~crates/openssl-example~ is just a derivation against the workspace level ~package~/~checks~ outputs aka ~cargo-workspace-deps~ et al, using mostly the same inputs you'd expect in a derivation and match/mimic the binary options as close as possible in ~nativeBuildInputs~/~buildInputs~/~env~ options. Use this whenever any cargo workspace member crates needs something like ~openssl-sys~ to build/link.
+- ~crates/openssl-binary~ is just a binary that does the same ~binaries.openssl-binary~ entry with the same or equivalent settings for ~nativeBuildInputs~/~buildInputs~/~env~. Meant more if you have one binary that needs something that cargo doc etc.. won't get angy. Also has some patchelf and other shenanigans to make nix run work cause examples is the best spot for this crap to live to show all the nonsense and give me surface area I want to test against with all my own stuff at least.
+
+#+begin_src sh
+cd examples/openssl
+nix flake check -L
+nix run
+#+end_src

@@ -1,0 +1,19 @@
+* examples/complect
+
+Demonstrates most of the insanity this whole thing got built for ~binaries.NAME.variants~ builds multiple binaries:
+- two sharing ~pathDeps~ for common crates with a Windows cross compile target
+- a wasm32 target with a caller-pinned ~wasm-bindgen-cli~
+- a CUDA variant using custom ~pkgs~ set
+- a static portable musl linux binary (non PIE for now)
+- a portable macos variant (note how I did it is sheer evil, it might be broken in weird ways)
+- separate derivations for cargo ~release~/~release-fast~ profile versions
+- an esp32 riscv firmware example via ~#![no_std]~ ~firmware~ able to run on an ~esp32c3~ board with a backing shared lib crate showing the crate can also be used for unit tests on the native platform.
+
+Thus complecting most of what the module supports into one chungus cat example. This is built off of the insanity most of my crates seem to turn into lately somehow for some dam reason.
+
+#+begin_src sh
+cd examples/complect
+nix flake check -L
+#+end_src
+
+There is a lot you could run ~nix flake show~ and go nuts. Its an example bend it to your will/needs.

@@ -1,0 +1,12 @@
+* examples/ebpf
+
+Demonstrates using ~binaries~ and custom workspaces and a split between an ebpf only crate, and a static loader binary that embeds the ebpf binary object code. Also shows a nixos integration test to demonstrate runtime validation that everything still works in a nixos vm.
+
+#+begin_src sh
+cd examples/ebpf
+nix flake check -L
+#+end_src
+
+NB: ~nix run~ only really works on linux with this one, and also requires either root or likely ~CAP_SYS_ADMIN~ or at least ~CAP_PERFMON~ (I haven't validated what CAP_ this needs yet. It got late and I got bored. Consider this a reminder for future me to fit it.
+
+TODO: Future mitch fix ^^^ and stop being a lazy loaf.
