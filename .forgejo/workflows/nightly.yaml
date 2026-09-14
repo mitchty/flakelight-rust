@@ -13,11 +13,49 @@ jobs:
       - name: Checkout code
         uses: https://data.forgejo.org/actions/checkout@v4
 
-      - name: Bump example locks to latest
-        run: nix run .#update-examples
+      - name: Run nightly checks
+        id: run-checks
+        run: |
+          set -uo pipefail
 
-      - name: Run flake check
-        run: nix flake check -L
+          log_file="$(mktemp)"
 
-      - name: Run example checks
-        run: nix run .#ci
+          trap 'tail -n 50 "$log_file" 2>/dev/null || true' EXIT
+
+          {
+            nix run .#update-examples &&
+            nix flake check -L &&
+            nix run .#ci
+          } >"$log_file" 2>&1
+          exit_code=$?
+
+          printf 'log_file=%s\n' "$log_file" >>"$FORGEJO_OUTPUT"
+
+          exit "$exit_code"
+
+      - name: Open issue on failure
+        if: ${{ failure() }}
+        env:
+          LOG_FILE: ${{ steps.run-checks.outputs.log_file }}
+        run: |
+          set -uo pipefail
+
+          tail_log="$(tail -n 300 "$LOG_FILE" 2>/dev/null || printf '(log unavailable: %s)\n' "$LOG_FILE")"
+          run_url="${FORGEJO_SERVER_URL}/${FORGEJO_REPOSITORY}/actions/runs/${FORGEJO_RUN_ID}"
+
+          payload="$(nix shell nixpkgs#jq --command jq -n \
+            --arg title "nightly check failed ($(date -u +%Y-%m-%d))" \
+            --arg run_url "$run_url" \
+            --arg log "$tail_log" \
+            '{
+               title: $title,
+               body: ("Nightly check failed.\n\nFull run log: " + $run_url +
+                      "\n\n<details><summary>Last 300 lines of the run log</summary>\n\n~~~\n" +
+                      $log + "\n~~~\n\n</details>\n")
+             }')"
+
+          nix shell nixpkgs#curl --command curl -sSf -X POST \
+            -H "Authorization: token ${FORGEJO_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "${FORGEJO_API_URL}/repos/${FORGEJO_REPOSITORY}/issues"
