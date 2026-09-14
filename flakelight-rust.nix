@@ -1068,9 +1068,8 @@ in
           )
         ) config.benchmarks)
         // {
-          # Here to enable `nix run .#update` to bump flake inputs for the module.
-          #
-          # TODO: I should enable this to work with cargo upgrade too...
+          # Here to enable `nix run .#update` to bump both flake inputs and
+          # this crate's Cargo.lock for the module.
           update =
             { pkgs, ... }:
             {
@@ -1078,8 +1077,14 @@ in
               program = "${
                 pkgs.writeShellApplication {
                   name = "update";
+                  runtimeInputs = [
+                    pkgs.cargo
+                    pkgs.cargo-edit
+                  ];
                   text = ''
                     ${pkgs.nix}/bin/nix flake update
+                    cargo update --verbose
+                    cargo upgrade --verbose
                   '';
                 }
               }/bin/update";
