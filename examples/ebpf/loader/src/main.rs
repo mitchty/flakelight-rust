@@ -60,9 +60,16 @@ async fn main() -> anyhow::Result<()> {
     // ebpf run to work. Bit janky but normal as per the docs.
     match aya_log::EbpfLogger::init(&mut ebpf) {
         Ok(logger) => {
-            let mut logger =
-                tokio::io::unix::AsyncFd::with_interest(logger, tokio::io::Interest::READABLE)
-                    .context("failed to register eBPF logger fd with tokio")?;
+	    // This unsafe is ok simply due to this is how we *have* to keep the
+	    // aya fd open for logging in the ebpf module to work at all.
+            let mut logger = unsafe {
+                tokio::io::unix::AsyncFd::register_with_interest(
+                    logger,
+                    tokio::io::Interest::READABLE,
+                )
+            }
+            .map_err(|e| e.into_parts().1)
+            .context("failed to register eBPF logger fd with tokio")?;
             tokio::task::spawn(async move {
                 loop {
                     let Ok(mut guard) = logger.readable_mut().await else {
