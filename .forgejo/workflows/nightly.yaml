@@ -16,22 +16,16 @@ jobs:
       - name: Run nightly checks
         id: run-checks
         run: |
-          set -uo pipefail
+          set -uox pipefail
 
           log_file="$(mktemp)"
 
-          trap 'tail -n 50 "$log_file" 2>/dev/null || true' EXIT
-
-          {
-            nix run .#update-examples &&
-            nix flake check -L &&
-            nix run .#ci
-          } >"$log_file" 2>&1
-          exit_code=$?
-
           printf 'log_file=%s\n' "$log_file" >>"$FORGEJO_OUTPUT"
 
-          exit "$exit_code"
+          trap 'tail -n 50 "$log_file" 2>/dev/null || true' EXIT
+
+          cilogger --log-file "$log_file" --timeout 60m --timestamps -- \
+            sh -c "nix run .#update-examples && nix flake check -L && nix run .#ci"
 
       - name: Open issue on failure
         if: ${{ failure() }}
@@ -41,10 +35,9 @@ jobs:
           set -uo pipefail
 
           tail_log="$(tail -n 300 "$LOG_FILE" 2>/dev/null || printf '(log unavailable: %s)\n' "$LOG_FILE")"
-          run_url="${FORGEJO_SERVER_URL}/${FORGEJO_REPOSITORY}/actions/runs/${FORGEJO_RUN_ID}"
+          run_url="${FORGEJO_SERVER_URL}/${FORGEJO_REPOSITORY}/actions/runs/${FORGEJO_RUN_NUMBER}"
 
-          payload="$(nix shell nixpkgs#jq --command jq -n \
-            --arg title "nightly check failed ($(date -u +%Y-%m-%d))" \
+          payload="$(jq -n --arg title "nightly check failed ($(date -u +%Y-%m-%d))" \
             --arg run_url "$run_url" \
             --arg log "$tail_log" \
             '{
@@ -54,7 +47,7 @@ jobs:
                       $log + "\n~~~\n\n</details>\n")
              }')"
 
-          nix shell nixpkgs#curl --command curl -sSf -X POST \
+          curl -sSf -X POST \
             -H "Authorization: token ${FORGEJO_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "$payload" \
