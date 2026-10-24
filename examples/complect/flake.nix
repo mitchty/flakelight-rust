@@ -203,7 +203,25 @@
                     libcublas
                   ];
 
-                env = { pkgs, ... }: { CUDA_PATH = "${pkgs.cudaPackages.cudatoolkit}"; };
+                # Note, `pkgs.cudatoolkit` pulls in too much, be explicit about
+                # what is needed in the example.
+                env =
+                  { pkgs, ... }:
+                  let
+                    cudaPath = pkgs.symlinkJoin {
+                      name = "cuda-path";
+                      paths = with pkgs.cudaPackages; [
+                        cuda_cudart
+                        cuda_nvcc
+                        cuda_nvrtc
+                        cccl
+                        libcublas
+                      ];
+                    };
+                  in
+                  {
+                    CUDA_PATH = "${cudaPath}";
+                  };
               };
             };
           };

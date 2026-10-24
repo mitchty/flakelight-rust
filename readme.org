@@ -9,7 +9,7 @@ Unlike [[https://github.com/accelbread/flakelight-rust][accelbread/flakelight-ru
 - Ability to easily setup tracing/profiling targets
 - Easy ability to add wasm32 targets as well for crates so that native and wasm are treated as equals
 - A default more "development" checks/devShell set for interactive builds ie:
-  * clippy is setup to deny warnings for release profile builds
+  * clippy is setup to deny warnings by default and built off the dev profile, true for all workspace level derivation
   * cargo doc also setup to deny warnings for any documentation
   * cargo-nextest to allow for easy unit test integration
   * cargo-deny to help detecting duplicate crates as well as license or dependency-graph drift

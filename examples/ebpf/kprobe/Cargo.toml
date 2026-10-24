@@ -13,6 +13,11 @@ path = "src/main.rs"
 aya-ebpf = "=0.2.0"
 aya-log-ebpf = "=0.2.0"
 
+[profile.dev]
+# no_std targets have no unwinding, flake checks build with the dev profile now so
+# make sure we can panic in the example.
+panic = "abort"
+
 [profile.release]
 # Keep release small, don't add optimization: another source of
 # BPF_PROG_LOAD failures according to docs.

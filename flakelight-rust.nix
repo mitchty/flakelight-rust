@@ -500,31 +500,49 @@ in
             buildInputs = resolvedBuildInputs;
             env = config.env resolvedInjected;
           };
-          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+          # Nothing from clippy,doc,nextest needs the release profile. So for
+          # all of them use the dev profile explicitly. `config.env` still
+          # allows a caller to force a different `CARGO_PROFILE`.
+          devArgs = commonArgs // {
+            env = {
+              CARGO_PROFILE = "dev";
+            }
+            // commonArgs.env;
+          };
+          devArtifacts = craneLib.buildDepsOnly devArgs;
+
+          # `cargo bench` uses the bench profile which inherits release, so
+          # only the bench compile derivations need optimized deps. Same
+          # derivation as the package's deps so it is shared when both exist.
+          #
+          # TODO: I really need to brain out how I want to do benchmark stuff
+          # generically.
+          releaseArtifacts = craneLib.buildDepsOnly commonArgs;
         in
         {
           "${config.pname}-clippy" = craneLib.cargoClippy (
-            commonArgs
+            devArgs
             // {
-              inherit cargoArtifacts;
+              cargoArtifacts = devArtifacts;
               cargoClippyExtraArgs = "--all-targets -- --deny warnings";
             }
           );
 
           "${config.pname}-doc" = craneLib.cargoDoc (
-            commonArgs
+            devArgs
             // {
-              inherit cargoArtifacts;
-              env = commonArgs.env // {
+              cargoArtifacts = devArtifacts;
+              env = devArgs.env // {
                 RUSTDOCFLAGS = "--deny warnings";
               };
             }
           );
 
           "${config.pname}-nextest" = craneLib.cargoNextest (
-            commonArgs
+            devArgs
             // {
-              inherit cargoArtifacts;
+              cargoArtifacts = devArtifacts;
               partitions = 1;
               partitionType = "count";
             }
@@ -555,7 +573,7 @@ in
               craneLib.mkCargoDerivation (
                 commonArgs
                 // {
-                  inherit cargoArtifacts;
+                  cargoArtifacts = releaseArtifacts;
                   pnameSuffix = "-bench-compile-${name}";
                   buildPhaseCargoCommand = "";
                   checkPhaseCargoCommand = "cargo bench ${bench.cargoExtraArgs} --no-run";
