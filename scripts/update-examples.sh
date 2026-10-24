@@ -57,6 +57,12 @@ while IFS= read -r pkg_file; do
 }
 EOF
 
+  # nix-update uses `git diff` when the version is up to date, and that exits
+  # 129 outside of a git repo. So create it and add them so the flake is happy
+  # enough.
+  git -C "$scratch" init -q
+  git -C "$scratch" add flake.nix wasm-bindgen-cli.nix
+
   if (cd "$scratch" && nix-update wasm-bindgen-cli --flake --version "$resolved"); then
     cp "$scratch/wasm-bindgen-cli.nix" "$pkg_file"
   else
