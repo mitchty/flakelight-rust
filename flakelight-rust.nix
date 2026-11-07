@@ -452,7 +452,21 @@ in
             strictDeps = true;
             nativeBuildInputs = resolvedNativeBuildInputs;
             buildInputs = resolvedBuildInputs;
-            env = config.env resolvedInjected;
+            # Default to the dev profile, `config.env` will still force a
+            # different `CARGO_PROFILE` if specified. Release builds are what
+            # the `binaries.<name>.variants` derivations are for. Differing from
+            # upstream crane here to match cargo intentionally. Mostly to ensure
+            # that all the clippy/nextest/etc.. builds share the same dep
+            # derivation. I feel like binaries should be their own separate
+            # derivations. This flake is intended to help out develpoers and
+            # they should be able to see that if they want an optimized binary
+            # that the whole variant thing exists just for that purpose. And you
+            # can even setup disparate profiles to do different binaries if you
+            # like.
+            env = {
+              CARGO_PROFILE = "dev";
+            }
+            // config.env resolvedInjected;
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
         in
@@ -498,51 +512,37 @@ in
             strictDeps = true;
             nativeBuildInputs = resolvedNativeBuildInputs;
             buildInputs = resolvedBuildInputs;
-            env = config.env resolvedInjected;
-          };
-
-          # Nothing from clippy,doc,nextest needs the release profile. So for
-          # all of them use the dev profile explicitly. `config.env` still
-          # allows a caller to force a different `CARGO_PROFILE`.
-          devArgs = commonArgs // {
+            # default package now is the dev cargo profile to share this across check derivations.
             env = {
               CARGO_PROFILE = "dev";
             }
-            // commonArgs.env;
+            // config.env resolvedInjected;
           };
-          devArtifacts = craneLib.buildDepsOnly devArgs;
-
-          # `cargo bench` uses the bench profile which inherits release, so
-          # only the bench compile derivations need optimized deps. Same
-          # derivation as the package's deps so it is shared when both exist.
-          #
-          # TODO: I really need to brain out how I want to do benchmark stuff
-          # generically.
-          releaseArtifacts = craneLib.buildDepsOnly commonArgs;
+          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
         in
         {
           "${config.pname}-clippy" = craneLib.cargoClippy (
-            devArgs
+            commonArgs
             // {
-              cargoArtifacts = devArtifacts;
+              inherit cargoArtifacts;
               cargoClippyExtraArgs = "--all-targets -- --deny warnings";
             }
           );
 
           "${config.pname}-doc" = craneLib.cargoDoc (
-            devArgs
+            commonArgs
             // {
-              cargoArtifacts = devArtifacts;
-              env = devArgs.env // {
+              inherit cargoArtifacts;
+              env = commonArgs.env // {
                 RUSTDOCFLAGS = "--deny warnings";
               };
             }
           );
 
           "${config.pname}-nextest" = craneLib.cargoNextest (
-            devArgs
+            commonArgs
             // {
-              cargoArtifacts = devArtifacts;
+              inherit cargoArtifacts;
               partitions = 1;
               partitionType = "count";
             }
@@ -564,16 +564,19 @@ in
           };
         }
         // (
-          # Map each named bench derivation into a package derivation and apps
+          # Map every bench derivation into a package derivation and apps
           # derivation for running outside of the nix sandbox. Note, the package
-          # derivation doesn't run things intentionally.
+          # derivation doesn't run things intentionally. `cargo bench` uses the
+          # bench profile so that shared dev deps are rebuilt, that's accepted
+          # for today. TODO: I do need to think this through, would like to
+          # share benchmarking in my own downstream derivations.
           lib.mapAttrs' (
             name: bench:
             lib.nameValuePair "${name}-bench-compile" (
               craneLib.mkCargoDerivation (
                 commonArgs
                 // {
-                  cargoArtifacts = releaseArtifacts;
+                  inherit cargoArtifacts;
                   pnameSuffix = "-bench-compile-${name}";
                   buildPhaseCargoCommand = "";
                   checkPhaseCargoCommand = "cargo bench ${bench.cargoExtraArgs} --no-run";

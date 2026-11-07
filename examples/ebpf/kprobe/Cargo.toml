@@ -14,8 +14,8 @@ aya-ebpf = "=0.2.0"
 aya-log-ebpf = "=0.2.0"
 
 [profile.dev]
-# no_std targets have no unwinding, flake checks build with the dev profile now so
-# make sure we can panic in the example.
+# no_std targets have no unwinding support, the default package and checks build
+# with the dev profile now so ensure we can panic in the example runs.
 panic = "abort"
 
 [profile.release]
