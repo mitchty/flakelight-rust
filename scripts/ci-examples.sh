@@ -8,6 +8,10 @@
 # examples it just warns at the end to say: those don't exist thats a you
 # problem.
 #
+# Each example is evaluated with import from derivation disabled, then
+# checked to make sure I don't introduce another IFD in the nix library.
+# Examples in SKIP_IFD_CHECK, for now only ebpf, are exempt from that check.
+#
 # Has to be in apps for sandboxing reasons, future mitch don't try getting this
 # to work in the sandbox... again. There be many dragons, this is just simpler
 # though it sadly doesn't work with nix flake check but whatever.
@@ -27,6 +31,13 @@ missing_file="$tmp_dir/missing"
 : > "$missing_file"
 
 find examples -mindepth 2 -maxdepth 2 -name flake.nix | sort > "$list_file"
+
+# Examples exempt from the no import from derivation evaluation check, space
+# separated. ebpf's kprobe flake needs IFD on purpose as it reads files out of
+# the fenix toolchain derivation directly so it can never pass without IFD, and
+# the check also needs toolchains built which fails on macos. SKIP_IFD_CHECK=""
+# exempts nothing and lets it all fail even if its not really a failure.
+skip_ifd_check="${SKIP_IFD_CHECK-ebpf}"
 
 if [ "$#" -gt 0 ]; then
   filtered_file="$tmp_dir/filtered"
@@ -48,6 +59,23 @@ while IFS= read -r flake; do
   dir="examples/$example"
 
   printf "checking: %s\n" "$example"
+  # Evaluation of the flake should not need to build anything at eval time. IFD
+  # makes `nix flake show/check` fail for any nix config without it, so evaluate
+  # every system with it off first to catch it being reintroduced accidentally
+  # again.
+  case " $skip_ifd_check " in
+    *" $example "*)
+      printf "skip: %s import from derivation check\n" "$example" >&2
+      ;;
+    *)
+      if ! (cd "$dir" && nix flake check --no-build --all-systems --option allow-import-from-derivation false); then
+        printf "fatal: %s needs import from derivation to evaluate\n" "$example" >&2
+        failed="$failed $example"
+        continue
+      fi
+      ;;
+  esac
+
   if (cd "$dir" && nix flake check -L); then
     printf "ok: %s\n" "$example" >&2
   else

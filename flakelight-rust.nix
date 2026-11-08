@@ -631,6 +631,20 @@ in
             ];
           };
 
+          # Binary version at eval time its Cargo.toml, `version.workspace =
+          # true` will fallback to the workspace version if this fails.
+          mkCrateVersion =
+            binCfg:
+            let
+              crateToml = binCfg.crate + "/Cargo.toml";
+              version =
+                if binCfg.crate != null && pathExists crateToml then
+                  (fromTOML (readFile crateToml)).package.version or null
+                else
+                  null;
+            in
+            if builtins.isString version then version else tomlPackage.version or "0.0.0";
+
           mkCrateSrc =
             pkgs: craneLib: binName: binCfg:
             if binCfg.fileset != null then
@@ -798,6 +812,14 @@ in
               baseCommonArgs = {
                 src = mkCrateSrc pkgs craneLib name binCfg;
                 pname = name;
+                # Crate src can itself be a derivation, ref: `mkCrateSrc`. Crane
+                # reads the version from, and vendors from, `src` when not told
+                # otherwise. Doing that on a derivation is a nix IFD so give it
+                # both bits of data from the plain source tree derivation to
+                # avoid the IFD call which is not really needed nor wanted for
+                # infra style nix.
+                version = mkCrateVersion binCfg;
+                cargoVendorDir = craneLibFor.vendorCargoDeps { src = depsSrc; };
                 strictDeps = true;
                 cargoExtraArgs = lib.concatStringsSep " " (
                   lib.filter (s: s != "") [
@@ -829,7 +851,15 @@ in
               commonArgs =
                 (overrideCraneArgsFn (injected // { commonArgs = baseCommonArgs; })) // resolvedExtraCraneArgs;
 
-              cargoArtifacts = craneLibFor.buildDepsOnly (commonArgs // { src = depsSrc; });
+              # Keep the version directly out of the deps derivation so that a version bump
+              # doesn't rebuild every dependency if thats all that changed. Also here for the IFD avoidance.
+              cargoArtifacts = craneLibFor.buildDepsOnly (
+                commonArgs
+                // {
+                  src = depsSrc;
+                  version = tomlPackage.version or "0.0.0";
+                }
+              );
 
               readelf = "${pkgs.buildPackages.binutils}/bin/readelf";
               otool = "${pkgs.buildPackages.cctools}/bin/otool";
